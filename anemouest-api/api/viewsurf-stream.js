@@ -14,12 +14,16 @@ const TS_SYNC_BYTE = 0x47;
 function getStreamPosterUrl(streamUrl) {
   // Quanteec sometimes has poster images at similar paths
   // Try common patterns for poster/thumbnail URLs
-  const baseUrl = streamUrl.replace(/\/media_\d+\.m3u8$/, '');
+  // Handle both master.m3u8 and media_0.m3u8 formats
+  const baseUrl = streamUrl
+    .replace(/\/master\.m3u8$/, '')
+    .replace(/\/media_\d+\.m3u8$/, '');
   return [
     `${baseUrl}/poster.jpg`,
     `${baseUrl}/thumbnail.jpg`,
     `${baseUrl}/cover.jpg`,
     streamUrl.replace('/media_0.m3u8', '/poster.jpg'),
+    streamUrl.replace('/master.m3u8', '/poster.jpg'),
   ];
 }
 
@@ -115,6 +119,30 @@ const VIEWSURF_STREAMS = {
   'new-1770302739665': 'https://ds1-cache.quanteec.com/contents/encodings/live/5a3840a9-818c-432d-3831-3230-6d61-63-b94e-ec74c6293339d/media_0.m3u8', // Cap Coz
   'new-1770303647286': 'https://ds2-cache.quanteec.com/contents/encodings/live/42de5499-f4e1-425f-3236-3130-6d61-63-8320-013bf9662d2cd/media_0.m3u8', // Le Port Penmarch
   'new-1770303809736': 'https://ds1-cache.quanteec.com/contents/encodings/live/068f1c25-1be9-4494-3439-3330-6d61-63-837f-3e21424f20a2d/media_0.m3u8', // Le Port Kerity
+
+  // Vision-Environnement webcams (Quanteec CDN)
+  've-binic': 'https://visionenvironnement.quanteec.com/contents/encodings/live/eaf789b3-a03f-4137-746c-7561-6665-64-9685-3288bd76a811d/media_0.m3u8',
+  've-perros-port': 'https://visionenvironnement.quanteec.com/contents/encodings/live/0bbb7e52-0b32-4070-746c-7561-6665-64-8a7c-2ba5adb3143dd/media_0.m3u8',
+  've-perros-trestraou': 'https://visionenvironnement.quanteec.com/contents/encodings/live/87a59365-6a80-4e3b-746c-7561-6665-64-8e67-a5d4fdced41cd/media_0.m3u8',
+  've-ploumanach': 'https://visionenvironnement.quanteec.com/contents/encodings/live/6726ebb0-fe34-4734-746c-7561-6665-64-b54d-72cc36d09f92d/media_0.m3u8',
+  've-tregastel': 'https://visionenvironnement.quanteec.com/contents/encodings/live/eb282cec-a15f-4a35-746c-7561-6665-64-818a-cedda620ee9dd/media_0.m3u8',
+  've-locquirec': 'https://visionenvironnement.quanteec.com/contents/encodings/live/f805f657-0d7f-4d9e-746c-7561-6665-64-a08c-2306bf8dfd65d/media_0.m3u8',
+  've-brest-port': 'https://visionenvironnement.quanteec.com/contents/encodings/live/43563c6a-f168-4ff2-746c-7561-6665-64-a238-ef6b7454e47ed/media_0.m3u8',
+  've-portsall': 'https://visionenvironnement.quanteec.com/contents/encodings/live/25eb1639-dd59-4861-746c-7561-6665-64-97e3-3118969944e0d/media_0.m3u8',
+  've-conquet': 'https://visionenvironnement.quanteec.com/contents/encodings/live/23a9a824-6db4-4ae2-746c-7561-6665-64-9f20-b489dda0d6d6d/media_0.m3u8',
+  've-ile-sein': 'https://visionenvironnement.quanteec.com/contents/encodings/live/3665df87-975d-4e72-746c-7561-6665-64-9547-dc2c348448c1d/media_0.m3u8',
+  've-pointe-raz': 'https://visionenvironnement.quanteec.com/contents/encodings/live/0c6e6ed3-7436-48c8-746c-7561-6665-64-9230-1f27453a1a3bd/media_0.m3u8',
+  've-audierne-port': 'https://visionenvironnement.quanteec.com/contents/encodings/live/917376b5-2fd1-4282-746c-7561-6665-64-b293-6479a76ee9cad/media_0.m3u8',
+  've-esquibien': 'https://visionenvironnement.quanteec.com/contents/encodings/live/754f14bd-21c6-4ffb-746c-7561-6665-64-a179-4545dd743885d/media_0.m3u8',
+  've-douarnenez-plage': 'https://visionenvironnement.quanteec.com/contents/encodings/live/1f1a5b37-b247-4e15-746c-7561-6665-64-aa5e-d27be2eaf3d7d/media_0.m3u8',
+  've-penestin': 'https://visionenvironnement.quanteec.com/contents/encodings/live/6c8db124-f44e-4da1-746c-7561-6665-64-a7db-77db9ffc8c43d/media_0.m3u8',
+  've-gavres': 'https://visionenvironnement.quanteec.com/contents/encodings/live/3d1106a9-4c03-45b6-746c-7561-6665-64-90db-5c15b5f9deb2d/media_0.m3u8',
+  've-gois': 'https://visionenvironnement.quanteec.com/contents/encodings/live/b5e7710b-94c9-48a0-746c-7561-6665-64-aeac-6a516e868621d/media_0.m3u8',
+  've-herbaudiere': 'https://visionenvironnement.quanteec.com/contents/encodings/live/c2262b2a-ed62-416b-746c-7561-6665-64-8740-7af835c1d5d5d/media_0.m3u8',
+  've-toulon': 'https://visionenvironnement.quanteec.com/contents/encodings/live/ab36f88f-c448-4f69-746c-7561-6665-64-9f13-cd6067dc2a80d/media_0.m3u8',
+  've-ajaccio-pano': 'https://visionenvironnement.quanteec.com/contents/encodings/live/a38bc0bb-2cf8-48e4-746c-7561-6665-64-bb18-9b9ffc7bff63d/media_0.m3u8',
+  've-propriano': 'https://visionenvironnement.quanteec.com/contents/encodings/live/50e032b9-8e2c-4fc4-746c-7561-6665-64-b640-ebc6bfede494d/media_0.m3u8',
+  've-cargese': 'https://visionenvironnement.quanteec.com/contents/encodings/live/41e2c7ad-2e0f-42f6-746c-7561-6665-64-8465-8bb7389e4290d/media_0.m3u8',
 };
 
 export default async function handler(req, res) {
@@ -126,7 +154,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { id, action, quality, width } = req.query;
+  const { id, action, quality, width, streamUrl: dynamicStreamUrl } = req.query;
 
   // List available streams
   if (action === 'list') {
@@ -140,11 +168,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing id parameter' });
   }
 
-  const streamUrl = VIEWSURF_STREAMS[id];
+  // Use hardcoded stream URL or dynamic one passed as parameter
+  let streamUrl = VIEWSURF_STREAMS[id];
+
+  // If not in hardcoded list, use dynamic streamUrl if provided
+  if (!streamUrl && dynamicStreamUrl) {
+    streamUrl = dynamicStreamUrl;
+    console.log(`Using dynamic streamUrl for ${id}: ${streamUrl}`);
+  }
+
   if (!streamUrl) {
     return res.status(404).json({
       error: 'Stream not found',
-      available: Object.keys(VIEWSURF_STREAMS)
+      id,
+      note: 'Pass streamUrl parameter for webcams not in hardcoded list'
     });
   }
 
