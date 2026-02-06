@@ -448,10 +448,11 @@ export default async function handler(req, res) {
       console.error('KV merge failed:', e.message);
     }
 
-    // Auto-transform imageUrl for webcams with HLS streams (Quanteec)
+    // Auto-transform imageUrl for Viewsurf webcams with HLS streams (Quanteec)
     // This ensures new webcams added via admin panel automatically use the HLS stream
     mergedWebcams = mergedWebcams.map(w => {
-      // Skip if already using viewsurf-stream or no Quanteec streamUrl
+      // Only apply to Viewsurf webcams with Quanteec streamUrl
+      if (w.source !== 'Viewsurf') return w;
       if (!w.streamUrl?.includes('quanteec')) return w;
       if (w.imageUrl?.includes('viewsurf-stream') && w.imageUrl?.includes('streamUrl=')) return w;
 
