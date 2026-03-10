@@ -1,0 +1,31 @@
+{
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.07766,0.18092,0.33900,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode" : "darken",
+          "fill" : "automatic",
+          "image-name" : "logos (1).png",
+          "name" : "logos (1)"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
