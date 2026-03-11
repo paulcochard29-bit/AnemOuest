@@ -34,6 +34,7 @@ const QUANTEEC_STREAMS = {
   'vs-goury': 'https://ds2-cache.quanteec.com/contents/encodings/live/ae1a4a8c-784b-4571-3537-3230-6d61-63-a65b-ceb2396bd8add/media_0.m3u8',
   'vs-barneville': 'https://ds2-cache.quanteec.com/contents/encodings/live/273a3e7a-b125-4cb1-3839-3030-6d61-63-a49f-22af76e7fbf2d/media_0.m3u8',
   // Hauts-de-France
+  'sk-le-portel': 'https://skaping.quanteec.com/contents/encodings/live/4e8844cd-6cbb-40b3-746c-7561-6665-64-89d2-2cef5a933a84d/media_0.m3u8',
   'vs-dunkerque': 'https://ds2-cache.quanteec.com/contents/encodings/live/8d9f7a17-a395-4be6-3739-3130-6d61-63-b32b-4069d95be7a5d/media_0.m3u8',
   'vs-bray-dunes': 'https://ds2-cache.quanteec.com/contents/encodings/live/4e0100d6-7bc4-43be-3839-3130-6d61-63-bd66-bcfd64e27574d/media_0.m3u8',
   'vs-zuydcoote': 'https://ds2-cache.quanteec.com/contents/encodings/live/8f0170c0-1b41-48f9-3030-3230-6d61-63-98e4-bc495cd8d793d/media_0.m3u8',
@@ -81,7 +82,7 @@ export default async function handler(req, res) {
 
   try {
     // Skaping URL helper (uses our proxy with compression)
-    // server param: 'data' (default), 'data2', 'data3' for different Skaping subdomains
+    // server param: 'data' (default), 'data2', 'data3', 's3' for different Skaping storage backends
     const skaping = (path, server = 'data') =>
       `https://anemouest-api.vercel.app/api/skaping?path=${encodeURIComponent(path)}${server !== 'data' ? `&server=${server}` : ''}`;
 
@@ -97,9 +98,17 @@ export default async function handler(req, res) {
     const vision = (slug) =>
       `https://anemouest-api.vercel.app/api/vision?slug=${slug}`;
 
+    // YouTube live webcam thumbnail helper
+    const youtube = (videoId) =>
+      `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+
+    // WindsUp webcam proxy helper (dynamic image URLs require scraping)
+    const windsup = (camId) =>
+      `https://anemouest-api.vercel.app/api/windsup-webcam?id=${camId}`;
+
     const webcams = [
       // ═══════════════════════════════════════════════════════════
-      // BRETAGNE
+      // SKAPING - BRETAGNE
       // ═══════════════════════════════════════════════════════════
       {
         id: "concarneau",
@@ -113,10 +122,87 @@ export default async function handler(req, res) {
         source: "Skaping",
         refreshInterval: 600
       },
-
+      {
+        id: "concarneau-port",
+        name: "Port de Concarneau",
+        location: "Concarneau",
+        region: "Bretagne",
+        latitude: 47.8680,
+        longitude: -3.9110,
+        imageUrl: 'https://pubs.diabox.com/graphGeneration.php?data=cam_rt&lang=fr&size=large&id=115&lastData',
+        streamUrl: null,
+        source: "Diabox",
+        refreshInterval: 300
+      },
+      { id: "sk-arzon-navalo", name: "Port Navalo", location: "Arzon", region: "Bretagne", latitude: 47.5479, longitude: -2.9182, imageUrl: skaping('arzon/port-navalo', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-arzon-crouesty", name: "Port du Crouesty", location: "Arzon", region: "Bretagne", latitude: 47.5429, longitude: -2.8947, imageUrl: skaping('port-du-crouesty/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-damgan", name: "Grande Plage", location: "Damgan", region: "Bretagne", latitude: 47.5177, longitude: -2.5830, imageUrl: skaping('damgan/grande-plage/panoramique'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-sarzeau", name: "Port Saint-Jacques", location: "Sarzeau", region: "Bretagne", latitude: 47.4862, longitude: -2.7918, imageUrl: skaping('sarzeau/port-saint-jacques', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-port-manech", name: "Port Manec'h SNSM", location: "Nevez", region: "Bretagne", latitude: 47.8002, longitude: -3.7381, imageUrl: skaping('snsm/port-manech/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-belon", name: "Port de Belon", location: "Moëlan-sur-Mer", region: "Bretagne", latitude: 47.8127, longitude: -3.7067, imageUrl: skaping('moelan-sur-mer/port-de-belon', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-pont-aven", name: "Pont-Aven", location: "Pont-Aven", region: "Bretagne", latitude: 47.8534, longitude: -3.7479, imageUrl: skaping('pont-aven/photo'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-loctudy-plage", name: "Les Perdrix", location: "Loctudy", region: "Bretagne", latitude: 47.8358, longitude: -4.1697, imageUrl: skaping('loctudy/les-perdrix', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-loctudy-port", name: "Port de Plaisance", location: "Loctudy", region: "Bretagne", latitude: 47.8371, longitude: -4.1766, imageUrl: skaping('loctudy/port-de-plaisance'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-trebeurden", name: "Pors Termen", location: "Trébeurden", region: "Bretagne", latitude: 48.7731, longitude: -3.5840, imageUrl: skaping('trebeurden/porz-termen/plage', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lorient", name: "Rade Panoramique", location: "Lorient", region: "Bretagne", latitude: 47.7264, longitude: -3.3645, imageUrl: skaping('lorient/k3-la-base', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-guidel", name: "Port de Plaisance", location: "Guidel", region: "Bretagne", latitude: 47.7724, longitude: -3.5285, imageUrl: skaping('port-de-plaisance/guidel/panoramique'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lampaul", name: "La Corniche", location: "Lampaul-Plouarzel", region: "Bretagne", latitude: 48.4618, longitude: -4.7696, imageUrl: skaping('lampaul-plouarzel/la-corniche', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-brignogan", name: "Plage", location: "Plounéour-Brignogan", region: "Bretagne", latitude: 48.6664, longitude: -4.3261, imageUrl: skaping('plouneour-brignogan-plages', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-val-andre", name: "Casino Plage", location: "Pléneuf-Val-André", region: "Bretagne", latitude: 48.5909, longitude: -2.5530, imageUrl: skaping('pleneuf-val-andre/casino/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-port-la-foret", name: "Port La Forêt", location: "La Forêt-Fouesnant", region: "Bretagne", latitude: 47.8953, longitude: -3.9714, imageUrl: skaping('port-la-foret', 's3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-morlaix-ile", name: "Île aux Dames", location: "Baie de Morlaix", region: "Bretagne", latitude: 48.6861, longitude: -3.8841, imageUrl: skaping('morlaix/ile-aux-dames/solaire', 's3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-trinite-sur-mer", name: "Port Panoramique", location: "La Trinité-sur-Mer", region: "Bretagne", latitude: 47.5861, longitude: -3.0292, imageUrl: skaping('port-de-la-trinite-sur-mer/pano'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-quiberon", name: "Panoramique", location: "Quiberon", region: "Bretagne", latitude: 47.4833, longitude: -3.1167, imageUrl: skaping('quiberon/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-saint-malo-sablons", name: "Port des Sablons", location: "Saint-Malo", region: "Bretagne", latitude: 48.6497, longitude: -2.0261, imageUrl: skaping('saint-malo/port-des-sablons', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-saint-briac", name: "Capitainerie", location: "Saint-Briac-sur-Mer", region: "Bretagne", latitude: 48.6208, longitude: -2.1361, imageUrl: skaping('saint-briac/capitainerie/photo'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-aber-wrach", name: "Sémaphore", location: "Landéda", region: "Bretagne", latitude: 48.6100, longitude: -4.5833, imageUrl: skaping('les-abers/semaphore-de-l-aber-wrac-h', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-port-du-vilh", name: "Port du Vilh", location: "Landéda", region: "Bretagne", latitude: 48.5900, longitude: -4.5700, imageUrl: skaping('les-abers/port-du-vilh/photo', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lorient-kernevel", name: "Port Kernevel", location: "Larmor-Plage", region: "Bretagne", latitude: 47.7200, longitude: -3.3500, imageUrl: skaping('lorient/rade/port-kernevel', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lorient-keroman", name: "Port Keroman", location: "Lorient", region: "Bretagne", latitude: 47.7300, longitude: -3.3600, imageUrl: skaping('lorient/rade/port-keroman', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-loctudy-langoz", name: "Plage Langoz", location: "Loctudy", region: "Bretagne", latitude: 47.8345, longitude: -4.1750, imageUrl: skaping('loctudy/langoz', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lampaul-porspaul", name: "Porspaul", location: "Lampaul-Plouarzel", region: "Bretagne", latitude: 48.4530, longitude: -4.7730, imageUrl: skaping('lampaul-plouarzel/porspaul'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-guidel-fort", name: "Fort du Loch", location: "Guidel", region: "Bretagne", latitude: 47.7600, longitude: -3.5000, imageUrl: skaping('lorient/guidel-fort-du-loch', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-quimper", name: "Quai de l'Odet", location: "Quimper", region: "Bretagne", latitude: 47.9950, longitude: -4.1000, imageUrl: skaping('quimper/quai-de-l-odet'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
 
       // ═══════════════════════════════════════════════════════════
-      // CHARENTE-MARITIME / NOUVELLE-AQUITAINE
+      // SKAPING - NORMANDIE
+      // ═══════════════════════════════════════════════════════════
+      { id: "sk-granville", name: "Port", location: "Granville", region: "Normandie", latitude: 48.8347, longitude: -1.5951, imageUrl: skaping('8-milles-nautic/granville', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-gouville", name: "Plage", location: "Gouville-sur-Mer", region: "Normandie", latitude: 49.0993, longitude: -1.6096, imageUrl: skaping('gouville/sur/mer'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-jullouville", name: "Plage", location: "Jullouville", region: "Normandie", latitude: 48.7731, longitude: -1.5566, imageUrl: skaping('8-milles-nautic/jullouville'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-le-havre-port", name: "Port de Plaisance", location: "Le Havre", region: "Normandie", latitude: 49.4863, longitude: 0.1075, imageUrl: skaping('le-havre/port-de-plaisance', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+
+      // ═══════════════════════════════════════════════════════════
+      // SKAPING - HAUTS-DE-FRANCE
+      // ═══════════════════════════════════════════════════════════
+      { id: "sk-baie-somme", name: "Cap Hornu", location: "Saint-Valery-sur-Somme", region: "Hauts-de-France", latitude: 50.1903, longitude: 1.6116, imageUrl: skaping('baie-de-somme/cap-hornu'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-le-touquet", name: "Base Nord", location: "Le Touquet", region: "Hauts-de-France", latitude: 50.5367, longitude: 1.5942, imageUrl: skaping('le-touquet/base-nord', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-merlimont", name: "Plage", location: "Merlimont", region: "Hauts-de-France", latitude: 50.4629, longitude: 1.5725, imageUrl: skaping('merlimont/pano'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-le-portel", name: "Plage Live", location: "Le Portel", region: "Hauts-de-France", latitude: 50.7075, longitude: 1.5722, imageUrl: null, streamUrl: null, source: "Skaping", refreshInterval: 300 },
+      { id: "sk-berck-authie", name: "Baie d'Authie", location: "Berck-sur-Mer", region: "Hauts-de-France", latitude: 50.4100, longitude: 1.5700, imageUrl: skaping('berck-sur-mer/baie-d-authie'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-berck-eole", name: "Éole Kite", location: "Berck-sur-Mer", region: "Hauts-de-France", latitude: 50.3944, longitude: 1.5625, imageUrl: skaping('berck-sur-mer/eole'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-berck-mer", name: "Plage", location: "Berck-sur-Mer", region: "Hauts-de-France", latitude: 50.3900, longitude: 1.5550, imageUrl: skaping('berck-sur-mer/mer', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-touquet-sud", name: "Base Sud", location: "Le Touquet", region: "Hauts-de-France", latitude: 50.5205, longitude: 1.5942, imageUrl: skaping('le-touquet/base-sud'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-touquet-vue-mer", name: "Poste Central Vue Mer", location: "Le Touquet", region: "Hauts-de-France", latitude: 50.5244, longitude: 1.5847, imageUrl: skaping('le-touquet/poste-central/vue-mer', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+
+      // ═══════════════════════════════════════════════════════════
+      // SKAPING - PAYS DE LA LOIRE / VENDÉE
+      // ═══════════════════════════════════════════════════════════
+      { id: "sk-pornichet", name: "Plage", location: "Pornichet", region: "Pays de la Loire", latitude: 47.2645, longitude: -2.3449, imageUrl: skaping('pornichet/plage/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-govelle", name: "La Govelle", location: "Batz-sur-Mer", region: "Pays de la Loire", latitude: 47.2666, longitude: -2.4539, imageUrl: skaping('batz-sur-mer/la-govelle/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-guerande", name: "Panoramique", location: "Guérande", region: "Pays de la Loire", latitude: 47.3275, longitude: -2.4264, imageUrl: skaping('guerande/panoramique'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-noirmoutier-barbatre", name: "Plage de Barbâtre", location: "Noirmoutier", region: "Pays de la Loire", latitude: 46.9372, longitude: -2.1808, imageUrl: skaping('noirmoutier/plage-de-barbatre', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-port-du-bec", name: "Port du Bec", location: "Beauvoir-sur-Mer", region: "Pays de la Loire", latitude: 46.9356, longitude: -2.0713, imageUrl: skaping('port-du-bec', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-fromentine", name: "Centre Nautique", location: "La Barre-de-Monts", region: "Pays de la Loire", latitude: 46.8902, longitude: -2.1438, imageUrl: skaping('la-barre-de-monts/centre-nautique-360', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-batz-valentin", name: "Plage Valentin", location: "Batz-sur-Mer", region: "Pays de la Loire", latitude: 47.2666, longitude: -2.4539, imageUrl: skaping('batz-sur-mer/plage-valentin/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-pornichet-surf", name: "Plage Surf", location: "Pornichet", region: "Pays de la Loire", latitude: 47.2645, longitude: -2.3449, imageUrl: skaping('pornichet/plage/surf', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-pornic-port", name: "Port de Plaisance", location: "Pornic", region: "Pays de la Loire", latitude: 47.1133, longitude: -2.1017, imageUrl: skaping('pornic/port-de-plaisance', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-notre-dame-monts", name: "Plage Centrale", location: "Notre-Dame-de-Monts", region: "Pays de la Loire", latitude: 46.8358, longitude: -2.1338, imageUrl: skaping('notre-dame-de-monts/plage-centrale', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-st-jean-monts", name: "Front de Mer", location: "Saint-Jean-de-Monts", region: "Pays de la Loire", latitude: 46.7900, longitude: -2.0700, imageUrl: skaping('saint-jean-de-monts/front-de-mer/pano'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-sables-olona", name: "Port Olona", location: "Les Sables-d'Olonne", region: "Pays de la Loire", latitude: 46.4958, longitude: -1.7867, imageUrl: skaping('sables-d-olonne/port-olona/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+
+      // ═══════════════════════════════════════════════════════════
+      // SKAPING - CHARENTE-MARITIME / NOUVELLE-AQUITAINE
       // ═══════════════════════════════════════════════════════════
       {
         id: "larochelle",
@@ -130,9 +216,14 @@ export default async function handler(req, res) {
         source: "Skaping",
         refreshInterval: 600
       },
+      { id: "sk-larochelle-minimes", name: "Port des Minimes", location: "La Rochelle", region: "Nouvelle-Aquitaine", latitude: 46.1446, longitude: -1.1726, imageUrl: skaping('port-de-plaisance/la-rochelle/panoramique'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-rivedoux", name: "Plage Nord", location: "Rivedoux-Plage", region: "Nouvelle-Aquitaine", latitude: 46.1595, longitude: -1.2723, imageUrl: skaping('rivedoux-salle-des-fetes'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-le-porge", name: "Plage Océan", location: "Le Porge", region: "Nouvelle-Aquitaine", latitude: 44.8943, longitude: -1.2173, imageUrl: skaping('medoc-plein-sud/le-porge-ocean-plage'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-st-vincent-jard", name: "Panoramique", location: "Saint-Vincent-sur-Jard", region: "Pays de la Loire", latitude: 46.4167, longitude: -1.5333, imageUrl: skaping('saint-vincent-sur-jard/panoramique', 's3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-port-bourgenay", name: "Port Panoramique", location: "Talmont-Saint-Hilaire", region: "Pays de la Loire", latitude: 46.4456, longitude: -1.6872, imageUrl: skaping('port-bourgenay/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
 
       // ═══════════════════════════════════════════════════════════
-      // LANGUEDOC-ROUSSILLON / OCCITANIE
+      // SKAPING - LANGUEDOC-ROUSSILLON / OCCITANIE
       // ═══════════════════════════════════════════════════════════
       {
         id: "valras",
@@ -146,9 +237,13 @@ export default async function handler(req, res) {
         source: "Skaping",
         refreshInterval: 600
       },
+      { id: "sk-port-la-nouvelle", name: "Port", location: "Port-la-Nouvelle", region: "Occitanie", latitude: 43.0139, longitude: 3.0652, imageUrl: skaping('port-la-nouvelle', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-narbonne-plage", name: "Plage", location: "Narbonne-Plage", region: "Occitanie", latitude: 43.1691, longitude: 3.1812, imageUrl: skaping('narbonne/plage', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-le-barcares", name: "Les Dousses", location: "Le Barcarès", region: "Occitanie", latitude: 42.7903, longitude: 3.0353, imageUrl: skaping('le-barcares/dousses'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-gruissan", name: "Capitainerie", location: "Gruissan", region: "Occitanie", latitude: 43.1050, longitude: 3.0917, imageUrl: skaping('gruissan/capitainerie', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
 
       // ═══════════════════════════════════════════════════════════
-      // CÔTE D'AZUR / PACA
+      // SKAPING - CÔTE D'AZUR / PACA
       // ═══════════════════════════════════════════════════════════
       {
         id: "embiez",
@@ -174,16 +269,26 @@ export default async function handler(req, res) {
         source: "Skaping",
         refreshInterval: 600
       },
+      { id: "sk-mandelieu", name: "Panoramique", location: "Mandelieu-la-Napoule", region: "Provence-Alpes-Côte d'Azur", latitude: 43.5340, longitude: 6.9509, imageUrl: skaping('mandelieu/panoramique', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-mandelieu-mer", name: "Vue Mer", location: "Mandelieu-la-Napoule", region: "Provence-Alpes-Côte d'Azur", latitude: 43.5300, longitude: 6.9400, imageUrl: skaping('mandelieu/mer', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-port-grimaud", name: "Capitainerie", location: "Port Grimaud", region: "Provence-Alpes-Côte d'Azur", latitude: 43.2723, longitude: 6.5858, imageUrl: skaping('port-grimaud/capitainerie'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-menton-sablettes", name: "Plage des Sablettes", location: "Menton", region: "Provence-Alpes-Côte d'Azur", latitude: 43.7750, longitude: 7.5000, imageUrl: skaping('menton/plage-des-sablettes/panoramique'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-toulon-royale", name: "Tour Royale", location: "Toulon", region: "Provence-Alpes-Côte d'Azur", latitude: 43.1167, longitude: 5.9333, imageUrl: skaping('toulon/tour-royale'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-marseille-wtc", name: "WTC Panoramique", location: "Marseille", region: "Provence-Alpes-Côte d'Azur", latitude: 43.3123, longitude: 5.3676, imageUrl: skaping('marseille/world-trade-center'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
 
       // ═══════════════════════════════════════════════════════════
       // CORSE
       // ═══════════════════════════════════════════════════════════
       // Note: Skaping n'a pas encore de webcams installées en Corse
-      // Cette section sera mise à jour quand des webcams seront disponibles
 
       // ═══════════════════════════════════════════════════════════
-      // LACS
+      // SKAPING - LACS
       // ═══════════════════════════════════════════════════════════
+      { id: "sk-lac-bourget", name: "Port de Chatillon", location: "Lac du Bourget", region: "Auvergne-Rhône-Alpes", latitude: 45.6900, longitude: 5.8900, imageUrl: skaping('grand-lac/port-de-chatillon-360'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lac-aiguebelette", name: "Saint-Alban", location: "Lac d'Aiguebelette", region: "Auvergne-Rhône-Alpes", latitude: 45.5500, longitude: 5.7800, imageUrl: skaping('lac-d-aiguebelette/st-alban'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lac-serre-poncon", name: "Plage Embrun", location: "Lac de Serre-Ponçon", region: "Provence-Alpes-Côte d'Azur", latitude: 44.5600, longitude: 6.4900, imageUrl: skaping('lac-serre-poncon/plage-embrun', 'data3'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+      { id: "sk-lac-sainte-croix", name: "Bord de Lac", location: "Sainte-Croix-du-Verdon", region: "Provence-Alpes-Côte d'Azur", latitude: 43.7700, longitude: 6.1500, imageUrl: skaping('sainte-croix-du-verdon/bord-de-lac'), streamUrl: null, source: "Skaping", refreshInterval: 600 },
+
       // ═══════════════════════════════════════════════════════════
       // VIEWSURF - BRETAGNE
       // ═══════════════════════════════════════════════════════════
@@ -450,6 +555,50 @@ export default async function handler(req, res) {
       { id: "ve-lac-madine", name: "Lac de Madine", location: "Nonsard-Lamarche", region: "Grand Est", latitude: 48.9333, longitude: 5.7167, imageUrl: vision('lac-de-madine'), streamUrl: null, source: "Vision-Env", refreshInterval: 300 },
       { id: "ve-lac-settons", name: "Lac des Settons", location: "Montsauche-les-Settons", region: "Bourgogne-Franche-Comté", latitude: 47.2000, longitude: 4.0667, imageUrl: vision('lac-des-settons'), streamUrl: null, source: "Vision-Env", refreshInterval: 300 },
       { id: "ve-lac-st-point", name: "Lac Saint-Point", location: "Malbuisson", region: "Bourgogne-Franche-Comté", latitude: 46.8000, longitude: 6.3000, imageUrl: vision('malbuisson'), streamUrl: null, source: "Vision-Env", refreshInterval: 300 },
+
+      // ═══════════════════════════════════════════════════════════
+      // WINDSUP - WEBCAMS SPOTS
+      // ═══════════════════════════════════════════════════════════
+      // Normandie / Manche
+      { id: "wu-asnelles", name: "Poste de secours", location: "Asnelles", region: "Normandie", latitude: 49.338, longitude: -0.583, imageUrl: windsup('130'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-jullouville", name: "Jullouville", location: "Jullouville", region: "Normandie", latitude: 48.767, longitude: -1.553, imageUrl: windsup('109'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-ouistreham", name: "Colleville", location: "Ouistreham", region: "Normandie", latitude: 49.277, longitude: -0.249, imageUrl: windsup('24'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      // Nord / Hauts-de-France
+      { id: "wu-berck", name: "Berck", location: "Berck", region: "Hauts-de-France", latitude: 50.405, longitude: 1.558, imageUrl: windsup('57'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      // Bretagne
+      { id: "wu-quiberon", name: "Quiberon", location: "Quiberon", region: "Bretagne", latitude: 47.551, longitude: -3.133, imageUrl: windsup('41'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      // Aquitaine
+      { id: "wu-sanguinet", name: "Sanguinet", location: "Sanguinet", region: "Nouvelle-Aquitaine", latitude: 44.483, longitude: -1.083, imageUrl: windsup('46'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      // Occitanie
+      { id: "wu-gruissan", name: "Gruissan", location: "Gruissan", region: "Occitanie", latitude: 43.110, longitude: 3.125, imageUrl: windsup('23'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-la-franqui", name: "Poste des Coussoules", location: "La Franqui", region: "Occitanie", latitude: 42.928, longitude: 3.007, imageUrl: windsup('1554'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-la-ganguise", name: "La Ganguise", location: "La Ganguise", region: "Occitanie", latitude: 43.342, longitude: 1.859, imageUrl: windsup('21'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-la-grande-motte", name: "La Grande-Motte", location: "La Grande-Motte", region: "Occitanie", latitude: 43.553, longitude: 4.084, imageUrl: windsup('135'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-la-nautique", name: "La Nautique", location: "Narbonne", region: "Occitanie", latitude: 43.156, longitude: 2.975, imageUrl: windsup('1572'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-les-aresquiers", name: "Étang d'Ingril", location: "Les Aresquiers", region: "Occitanie", latitude: 43.457, longitude: 3.749, imageUrl: windsup('3'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-saint-cyprien", name: "Saint Cyprien", location: "Saint-Cyprien", region: "Occitanie", latitude: 42.624, longitude: 3.031, imageUrl: windsup('83'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      // PACA
+      { id: "wu-carro", name: "Carro", location: "Martigues", region: "PACA", latitude: 43.331, longitude: 5.039, imageUrl: windsup('5'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-fos", name: "Plage Ouest", location: "Fos-sur-Mer", region: "PACA", latitude: 43.422, longitude: 4.940, imageUrl: windsup('1530'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-la-ciotat", name: "La Ciotat", location: "La Ciotat", region: "PACA", latitude: 43.174, longitude: 5.607, imageUrl: windsup('118'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-la-coudouliere", name: "La Coudoulière", location: "Six-Fours", region: "PACA", latitude: 43.083, longitude: 5.820, imageUrl: windsup('86'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-le-jai", name: "Le Jaï", location: "Marignane", region: "PACA", latitude: 43.396, longitude: 5.154, imageUrl: windsup('26'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-le-pradet", name: "Garonne", location: "Le Pradet", region: "PACA", latitude: 43.098, longitude: 6.029, imageUrl: windsup('1536'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-marseille", name: "Pointe Rouge Digue", location: "Marseille", region: "PACA", latitude: 43.246, longitude: 5.364, imageUrl: windsup('44'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-rognac", name: "Base Nautique", location: "Rognac", region: "PACA", latitude: 43.489, longitude: 5.230, imageUrl: windsup('1561'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-saint-cyr", name: "Saint Cyr les Lecques", location: "Saint-Cyr-sur-Mer", region: "PACA", latitude: 43.182, longitude: 5.700, imageUrl: windsup('14'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-saint-laurent", name: "Saint Laurent du Var", location: "Saint-Laurent-du-Var", region: "PACA", latitude: 43.667, longitude: 7.186, imageUrl: windsup('29'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      { id: "wu-six-fours", name: "Le Brusc", location: "Six-Fours", region: "PACA", latitude: 43.072, longitude: 5.807, imageUrl: windsup('49'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+      // Centre
+      { id: "wu-poitiers", name: "Base de loisirs St Cyr", location: "Poitiers", region: "Nouvelle-Aquitaine", latitude: 46.588, longitude: 0.355, imageUrl: windsup('1541'), streamUrl: null, source: "WindsUp", refreshInterval: 300 },
+
+      // ═══════════════════════════════════════════════════════════
+      // YOUTUBE - LIVE WEBCAMS (via SkylineWebcams)
+      // ═══════════════════════════════════════════════════════════
+      { id: "yt-mers-les-bains", name: "Plage", location: "Mers-les-Bains", region: "Hauts-de-France", latitude: 50.0658, longitude: 1.3867, imageUrl: youtube('Kq_9wTO0dhU'), streamUrl: 'https://www.youtube.com/embed/Kq_9wTO0dhU?autoplay=1&mute=1', source: "YouTube", refreshInterval: 300 },
+      { id: "yt-le-treport", name: "Plage", location: "Le Tréport", region: "Normandie", latitude: 50.0597, longitude: 1.3722, imageUrl: youtube('8bRtD3VVbLY'), streamUrl: 'https://www.youtube.com/embed/8bRtD3VVbLY?autoplay=1&mute=1', source: "YouTube", refreshInterval: 300 },
+      { id: "yt-jard-sur-mer", name: "Côte", location: "Jard-sur-Mer", region: "Pays de la Loire", latitude: 46.4142, longitude: -1.5764, imageUrl: youtube('5LTeT_ANQv4'), streamUrl: 'https://www.youtube.com/embed/5LTeT_ANQv4?autoplay=1&mute=1', source: "YouTube", refreshInterval: 300 },
+      { id: "yt-villefranche", name: "Port", location: "Villefranche-sur-Mer", region: "PACA", latitude: 43.6958, longitude: 7.3103, imageUrl: youtube('zkEdGueUrek'), streamUrl: 'https://www.youtube.com/embed/zkEdGueUrek?autoplay=1&mute=1', source: "YouTube", refreshInterval: 300 },
     ];
 
     // Merge KV overrides (admin edits) and additions
@@ -466,11 +615,6 @@ export default async function handler(req, res) {
           if (!ov) return w;
           const parsed = typeof ov === 'string' ? JSON.parse(ov) : ov;
           if (parsed._hidden) return null;
-          // Don't let KV override imageUrl for webcams using viewsurf-stream (HLS)
-          if (w.imageUrl?.includes('viewsurf-stream')) {
-            const { imageUrl, ...rest } = parsed;
-            return { ...w, ...rest };
-          }
           return { ...w, ...parsed };
         }).filter(Boolean);
       }
@@ -486,12 +630,10 @@ export default async function handler(req, res) {
       console.error('KV merge failed:', e.message);
     }
 
-    // Populate streamUrl from QUANTEEC_STREAMS mapping for hardcoded webcams
-    // This ensures the API returns the actual HLS stream URL for admin panel display
+    // Populate streamUrl from QUANTEEC_STREAMS mapping (fallback only)
+    // If admin set a streamUrl via KV override, it takes priority
     mergedWebcams = mergedWebcams.map(w => {
-      // Skip if already has a streamUrl
       if (w.streamUrl) return w;
-      // Check if this webcam has a known Quanteec stream
       const streamUrl = QUANTEEC_STREAMS[w.id];
       if (streamUrl) {
         return { ...w, streamUrl };
@@ -499,13 +641,13 @@ export default async function handler(req, res) {
       return w;
     });
 
-    // Auto-transform imageUrl for Viewsurf webcams with HLS streams (Quanteec)
-    // This ensures new webcams added via admin panel automatically use the HLS stream
+    // Auto-transform imageUrl for webcams with HLS streams (Quanteec)
+    // This ensures webcams with Quanteec streams automatically get frame capture
     mergedWebcams = mergedWebcams.map(w => {
-      // Only apply to Viewsurf webcams with Quanteec streamUrl
-      if (w.source !== 'Viewsurf') return w;
       if (!w.streamUrl?.includes('quanteec')) return w;
       if (w.imageUrl?.includes('viewsurf-stream') && w.imageUrl?.includes('streamUrl=')) return w;
+      // Apply to Viewsurf webcams or any webcam with null/missing imageUrl
+      if (w.source !== 'Viewsurf' && w.imageUrl) return w;
 
       // Transform imageUrl to use viewsurf-stream with the streamUrl parameter
       const encodedStreamUrl = encodeURIComponent(w.streamUrl);
@@ -528,13 +670,21 @@ export default async function handler(req, res) {
       return res.status(200).json(mergedWebcams);
     }
 
-    // Filter out offline webcams
+    // Filter out offline webcams and attach lastCapture timestamp
     const onlineWebcams = mergedWebcams.filter(webcam => {
+      // HLS webcams (with streamUrl) are always considered online — health check can't reliably test them
+      if (webcam.streamUrl) return true;
       const status = healthData.webcams[webcam.id];
       // If no status for this webcam, assume it's online (new webcam)
       if (!status) return true;
       // Return only online webcams
       return status.online !== false;
+    }).map(webcam => {
+      const status = healthData.webcams[webcam.id];
+      return {
+        ...webcam,
+        lastCapture: status?.lastSuccess || null,
+      };
     });
 
     console.log(`Webcams: ${onlineWebcams.length}/${mergedWebcams.length} online`);

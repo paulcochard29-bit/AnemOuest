@@ -3,7 +3,7 @@
 // Approach: Fetch TS segment, extract I-frame, convert to JPEG
 // Fallback: Store TS segment for client-side playback
 
-import { put } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
 import sharp from 'sharp';
 
 // MPEG-TS packet size
@@ -154,7 +154,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { id, action, quality, width, streamUrl: dynamicStreamUrl } = req.query;
+  const { id, action, quality, width, streamUrl: dynamicStreamUrl, timestamp } = req.query;
 
   // List available streams
   if (action === 'list') {
@@ -168,21 +168,53 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing id parameter' });
   }
 
-  // Use hardcoded stream URL or dynamic one passed as parameter
-  let streamUrl = VIEWSURF_STREAMS[id];
-
-  // If not in hardcoded list, use dynamic streamUrl if provided
-  if (!streamUrl && dynamicStreamUrl) {
+  // Dynamic streamUrl parameter takes priority over hardcoded list
+  // This allows admin overrides to change the stream for any webcam
+  let streamUrl;
+  if (dynamicStreamUrl) {
     streamUrl = dynamicStreamUrl;
-    console.log(`Using dynamic streamUrl for ${id}: ${streamUrl}`);
+  } else {
+    streamUrl = VIEWSURF_STREAMS[id];
   }
 
-  if (!streamUrl) {
+  if (!streamUrl && !timestamp) {
     return res.status(404).json({
       error: 'Stream not found',
       id,
       note: 'Pass streamUrl parameter for webcams not in hardcoded list'
     });
+  }
+
+  // Historical image: serve from Blob storage
+  if (timestamp) {
+    try {
+      const ts = parseInt(timestamp);
+      const prefix = `webcams/${id}/${ts}.jpg`;
+      const { blobs } = await list({ prefix, limit: 1 });
+
+      if (blobs.length > 0 && blobs[0].pathname === prefix) {
+        const blobResponse = await fetch(blobs[0].url);
+        if (blobResponse.ok) {
+          const imageBuffer = Buffer.from(await blobResponse.arrayBuffer());
+          res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
+          res.setHeader('Content-Type', 'image/jpeg');
+          res.setHeader('X-Image-Timestamp', ts.toString());
+          res.setHeader('X-Source', 'blob-history');
+          return res.status(200).send(imageBuffer);
+        }
+      }
+
+      // Blob not found for this timestamp
+      if (!streamUrl) {
+        return res.status(404).json({ error: 'Historical image not found', id, timestamp: ts });
+      }
+      // Fall through to live capture if streamUrl available
+    } catch (e) {
+      console.log(`Blob history lookup failed for ${id}/${timestamp}:`, e.message);
+      if (!streamUrl) {
+        return res.status(404).json({ error: 'Historical image not found', id });
+      }
+    }
   }
 
   try {
@@ -268,12 +300,40 @@ export default async function handler(req, res) {
       });
     }
 
-    const playlist = await playlistResponse.text();
+    let playlist = await playlistResponse.text();
     console.log(`Playlist size: ${playlist.length} bytes`);
 
-    // Step 2: Parse playlist to find segment URLs
-    const lines = playlist.split('\n').filter(l => l.trim());
-    const segmentUrls = lines.filter(l => l.endsWith('.ts') || l.includes('.ts?'));
+    // Step 2: If master playlist, follow to first media playlist
+    let lines = playlist.split('\n').filter(l => l.trim());
+    let segmentUrls = lines.filter(l => l.endsWith('.ts') || l.includes('.ts?'));
+
+    if (segmentUrls.length === 0) {
+      // Check if this is a master playlist with sub-playlists
+      const subPlaylists = lines.filter(l => l.endsWith('.m3u8') || l.includes('.m3u8?'));
+      if (subPlaylists.length > 0) {
+        let subUrl = subPlaylists[0];
+        if (!subUrl.startsWith('http')) {
+          const baseUrl = streamUrl.substring(0, streamUrl.lastIndexOf('/') + 1);
+          subUrl = baseUrl + subUrl;
+        }
+        console.log(`Master playlist detected, following to: ${subUrl}`);
+        const subResponse = await fetch(subUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+            'Accept': '*/*',
+            'Origin': 'https://www.viewsurf.com',
+            'Referer': 'https://www.viewsurf.com/',
+          }
+        });
+        if (subResponse.ok) {
+          playlist = await subResponse.text();
+          lines = playlist.split('\n').filter(l => l.trim());
+          segmentUrls = lines.filter(l => l.endsWith('.ts') || l.includes('.ts?'));
+          // Update streamUrl for relative segment URL resolution
+          streamUrl = subUrl;
+        }
+      }
+    }
 
     if (segmentUrls.length === 0) {
       console.log('No segments found in playlist');

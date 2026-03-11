@@ -4,29 +4,19 @@
 // - /api/webcam-cron?action=capture&batch=2 - Capture batch 2 (webcams 25-49)
 // - ... up to batch=10 for all 245 webcams
 // - /api/webcam-cron?action=cleanup - Delete images older than 48h
+//
+// HLS webcams (with quanteec streamUrl) are skipped by normal capture
+// and handled by the dedicated HLS capture (?hlsOnly=true) every 15 min.
 
-import { put, list, del } from '@vercel/blob';
+import { put, list, del, head as blobHead } from '@vercel/blob';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const RETENTION_HOURS = 48;
-const BATCH_SIZE = 25; // 25 webcams per batch for faster execution
-
-// Viewsurf webcams with HLS streams available (fresher images via poster)
-// Only webcams that exist in webcams.js AND have HLS streams
-const VIEWSURF_HLS_STREAMS = new Set([
-  'vs-fouesnant-capi', 'vs-benodet', 'vs-penmarch', 'vs-guilvinec', 'vs-crozon', 'vs-pont-labbe',
-  'vs-paimpol', 'vs-combrit', 'vs-glenan', 'vs-croisic', 'vs-pouliguen',
-  'vs-lacanau', 'vs-arcachon', 'vs-seignosse', 'vs-le-havre', 'vs-dieppe',
-  'vs-siouville', 'vs-goury', 'vs-barneville', 'vs-dunkerque', 'vs-bray-dunes',
-  'vs-zuydcoote', 'vs-calais', 'vs-hardelot', 'vs-anglet', 'vs-nice',
-  // Custom webcams from KV
-  'new-1770302739665', 'new-1770303647286', 'new-1770303809736'
-]);
+const BATCH_SIZE = 25;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // Verify authorization
   const authHeader = req.headers.authorization;
   if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
     if (req.headers['x-vercel-cron'] !== '1') {
@@ -56,7 +46,6 @@ async function handleCapture(req, res, batchNum) {
     const webcamsResponse = await fetch('https://anemouest-api.vercel.app/api/webcams');
     const allWebcams = await webcamsResponse.json();
 
-    // Filter to specific batch if specified (1-10), otherwise capture all
     let webcams;
     if (batchNum >= 1 && batchNum <= 10) {
       const startIdx = (batchNum - 1) * BATCH_SIZE;
@@ -72,11 +61,10 @@ async function handleCapture(req, res, batchNum) {
       success: 0,
       failed: 0,
       skipped: 0,
-      hlsCaptures: 0,
       errors: []
     };
+    const capturedIds = []; // track successfully captured webcam IDs
 
-    // Process 10 at a time for faster completion
     const CONCURRENT = 10;
     const batches = [];
     for (let i = 0; i < webcams.length; i += CONCURRENT) {
@@ -88,17 +76,16 @@ async function handleCapture(req, res, batchNum) {
         try {
           let imageUrl = webcam.imageUrl;
 
-          // Skip HLS webcams - they're captured by the dedicated HLS job (every 15 min)
-          if (VIEWSURF_HLS_STREAMS.has(webcam.id)) {
+          // Skip HLS webcams - captured by dedicated HLS job (every 15 min)
+          if (webcam.streamUrl && webcam.streamUrl.includes('quanteec')) {
             results.skipped++;
             return;
           }
 
-          // Normal Viewsurf capture via proxy (returns image directly)
+          // Normal Viewsurf capture via proxy
           if (webcam.source === 'Viewsurf' && imageUrl.includes('viewsurf?id=')) {
             const idMatch = imageUrl.match(/id=(\d+)/);
             if (idMatch) {
-              // Use proxy URL directly - it returns the image
               imageUrl = `https://anemouest-api.vercel.app/api/viewsurf?id=${idMatch[1]}`;
             }
           }
@@ -141,6 +128,7 @@ async function handleCapture(req, res, batchNum) {
           });
 
           results.success++;
+          capturedIds.push(webcam.id);
         } catch (error) {
           results.failed++;
           results.errors.push({ id: webcam.id, error: error.message });
@@ -149,10 +137,38 @@ async function handleCapture(req, res, batchNum) {
 
       await Promise.all(promises);
 
-      // 25s timeout for cron-job.org compatibility
       if (Date.now() - startTime > 25000) {
         console.log('Approaching timeout, stopping capture');
         break;
+      }
+    }
+
+    // Update health blob with fresh capture timestamps
+    if (capturedIds.length > 0) {
+      try {
+        let healthData = { webcams: {}, lastCheck: Date.now() };
+        try {
+          const existing = await blobHead('webcam-health.json');
+          if (existing?.url) {
+            const r = await fetch(existing.url);
+            if (r.ok) healthData = await r.json();
+          }
+        } catch {}
+        const now = Date.now();
+        for (const id of capturedIds) {
+          healthData.webcams[id] = {
+            ...(healthData.webcams[id] || {}),
+            online: true,
+            lastSuccess: now,
+            lastCheck: now,
+            consecutiveFailures: 0,
+          };
+        }
+        await put('webcam-health.json', JSON.stringify(healthData), {
+          access: 'public', contentType: 'application/json', addRandomSuffix: false,
+        });
+      } catch (e) {
+        console.error('Failed to update health blob:', e.message);
       }
     }
 
@@ -174,24 +190,28 @@ async function handleCapture(req, res, batchNum) {
 async function handleHlsCapture(req, res) {
   const startTime = Date.now();
   const timestamp = Math.floor(startTime / 1000);
-  // Round to 15 minutes for HLS captures (900 seconds)
   const roundedTimestamp = Math.floor(timestamp / 900) * 900;
 
   console.log(`Starting HLS-only capture at ${new Date(startTime).toISOString()}`);
 
   try {
+    const webcamsResponse = await fetch('https://anemouest-api.vercel.app/api/webcams');
+    const allWebcams = await webcamsResponse.json();
+
+    // Dynamic: get all webcams with Quanteec HLS streams from API
+    const hlsWebcams = allWebcams
+      .filter(w => w.streamUrl && w.streamUrl.includes('quanteec'))
+      .map(w => ({ id: w.id, streamUrl: w.streamUrl }));
+
     const results = {
-      total: VIEWSURF_HLS_STREAMS.size,
+      total: hlsWebcams.length,
       success: 0,
       failed: 0,
       skipped: 0,
       errors: []
     };
+    const capturedHlsIds = [];
 
-    // Convert Set to Array for processing
-    const hlsWebcams = Array.from(VIEWSURF_HLS_STREAMS);
-
-    // Process 10 at a time
     const CONCURRENT = 10;
     const batches = [];
     for (let i = 0; i < hlsWebcams.length; i += CONCURRENT) {
@@ -199,12 +219,17 @@ async function handleHlsCapture(req, res) {
     }
 
     for (const batch of batches) {
-      const promises = batch.map(async (webcamId) => {
+      const promises = batch.map(async (webcam) => {
+        const webcamId = webcam.id;
+        const streamUrl = webcam.streamUrl;
+
         try {
-          const streamResponse = await fetch(
-            `https://anemouest-api.vercel.app/api/viewsurf-stream?id=${webcamId}`,
-            { signal: AbortSignal.timeout(15000) }
-          );
+          let apiUrl = `https://anemouest-api.vercel.app/api/viewsurf-stream?id=${webcamId}`;
+          if (streamUrl) {
+            apiUrl += `&streamUrl=${encodeURIComponent(streamUrl)}`;
+          }
+
+          const streamResponse = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
 
           if (!streamResponse.ok) {
             results.failed++;
@@ -233,6 +258,7 @@ async function handleHlsCapture(req, res) {
           });
 
           results.success++;
+          capturedHlsIds.push(webcamId);
         } catch (error) {
           results.failed++;
           results.errors.push({ id: webcamId, error: error.message });
@@ -241,10 +267,38 @@ async function handleHlsCapture(req, res) {
 
       await Promise.all(promises);
 
-      // 25s timeout safety
       if (Date.now() - startTime > 25000) {
         console.log('Approaching timeout, stopping HLS capture');
         break;
+      }
+    }
+
+    // Update health blob with fresh capture timestamps
+    if (capturedHlsIds.length > 0) {
+      try {
+        let healthData = { webcams: {}, lastCheck: Date.now() };
+        try {
+          const existing = await blobHead('webcam-health.json');
+          if (existing?.url) {
+            const r = await fetch(existing.url);
+            if (r.ok) healthData = await r.json();
+          }
+        } catch {}
+        const now = Date.now();
+        for (const id of capturedHlsIds) {
+          healthData.webcams[id] = {
+            ...(healthData.webcams[id] || {}),
+            online: true,
+            lastSuccess: now,
+            lastCheck: now,
+            consecutiveFailures: 0,
+          };
+        }
+        await put('webcam-health.json', JSON.stringify(healthData), {
+          access: 'public', contentType: 'application/json', addRandomSuffix: false,
+        });
+      } catch (e) {
+        console.error('Failed to update health blob:', e.message);
       }
     }
 
