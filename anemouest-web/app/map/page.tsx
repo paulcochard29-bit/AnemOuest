@@ -34,7 +34,7 @@ const MapView = dynamic(() => import('@/components/MapView').then(m => ({ defaul
   ),
 })
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoicGF1bDI5OTAwIiwiYSI6ImNta2Nvc3R6YjAzYjczZXM2Y2g3YmZkcTQifQ.CNTSppufgvTp0wQu9gKsgw'
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
 
 export default function MapPage() {
   useStations()

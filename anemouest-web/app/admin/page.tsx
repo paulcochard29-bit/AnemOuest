@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { API as API_BASE } from '@/lib/api';
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoicGF1bDI5OTAwIiwiYSI6ImNta2Nvc3R6YjAzYjczZXM2Y2g3YmZkcTQifQ.CNTSppufgvTp0wQu9gKsgw';
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 // ============================================================
 // TYPES
