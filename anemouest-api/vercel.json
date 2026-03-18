@@ -1,0 +1,129 @@
+{
+  "version": 2,
+  "regions": ["cdg1"],
+  "headers": [
+    {
+      "source": "/api/skaping",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=600, stale-while-revalidate=1200" },
+        { "key": "CDN-Cache-Control", "value": "public, max-age=600" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "public, max-age=600" }
+      ]
+    },
+    {
+      "source": "/api/viewsurf",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=600, stale-while-revalidate=1200" },
+        { "key": "CDN-Cache-Control", "value": "public, max-age=600" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "public, max-age=600" }
+      ]
+    },
+    {
+      "source": "/api/vision-env",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=600, stale-while-revalidate=1200" },
+        { "key": "CDN-Cache-Control", "value": "public, max-age=600" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "public, max-age=600" }
+      ]
+    },
+    {
+      "source": "/api/viewsurf-stream",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=60, stale-while-revalidate=120" },
+        { "key": "CDN-Cache-Control", "value": "public, max-age=60" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "public, max-age=60" }
+      ]
+    }
+  ],
+  "functions": {
+    "api/windsup.js": {
+      "maxDuration": 60
+    },
+    "api/webcam-cron.js": {
+      "maxDuration": 300
+    },
+    "api/webcam-health.js": {
+      "maxDuration": 60
+    },
+    "api/candhis.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/candhis-cron.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "api/push/send.ts": {
+      "maxDuration": 60
+    },
+    "api/admin/webcams.js": {
+      "maxDuration": 30
+    },
+    "api/admin/config.js": {
+      "maxDuration": 30
+    },
+    "api/spots.js": {
+      "maxDuration": 15
+    },
+    "api/admin/webcam-ai.js": {
+      "maxDuration": 60
+    },
+    "api/admin/stations.js": {
+      "maxDuration": 60
+    },
+    "api/admin/station-ai.js": {
+      "maxDuration": 60
+    },
+    "api/netatmo.js": {
+      "maxDuration": 60
+    },
+    "api/netatmo-cron.js": {
+      "maxDuration": 300
+    },
+    "api/admin/webcam-weather.js": {
+      "maxDuration": 120
+    },
+    "api/webcam-timeline.js": {
+      "maxDuration": 60
+    },
+    "api/viewsurf-stream.js": {
+      "maxDuration": 30
+    },
+    "api/ndbc.js": {
+      "maxDuration": 15
+    },
+    "api/wind-raster.js": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "api/wind-tiles.js": {
+      "maxDuration": 30
+    },
+    "api/wind-cron.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    }
+  },
+  "crons": [
+    { "path": "/api/warmup", "schedule": "*/3 * * * *" },
+    { "path": "/api/push/send", "schedule": "*/15 * * * *" },
+    { "path": "/api/candhis-cron", "schedule": "10,40 * * * *" },
+    { "path": "/api/webcam-health?check=true", "schedule": "15,45 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=1", "schedule": "0,30 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=2", "schedule": "1,31 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=3", "schedule": "2,32 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=4", "schedule": "3,33 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=5", "schedule": "4,34 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=6", "schedule": "5,35 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=7", "schedule": "6,36 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=8", "schedule": "7,37 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=9", "schedule": "8,38 * * * *" },
+    { "path": "/api/webcam-cron?action=capture&batch=10", "schedule": "9,39 * * * *" },
+    { "path": "/api/webcam-cron?hlsOnly=true", "schedule": "0,15,30,45 * * * *" },
+    { "path": "/api/webcam-cron?action=cleanup", "schedule": "0 */6 * * *" },
+    { "path": "/api/admin/webcam-ai?scope=offline&auto=true", "schedule": "0 6,18 * * *" },
+    { "path": "/api/netatmo-cron", "schedule": "*/3 * * * *" },
+    { "path": "/api/netatmo-cron?scan=true", "schedule": "5 */2 * * *" },
+    { "path": "/api/wind-cron", "schedule": "10 * * * *" }
+  ]
+}

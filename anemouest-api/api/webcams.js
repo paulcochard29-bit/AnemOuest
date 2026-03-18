@@ -2,8 +2,8 @@
 // Returns webcams for French coasts and lakes
 // Automatically filters out offline webcams based on health check status
 
-import { head } from '@vercel/blob';
-import { kv } from '@vercel/kv';
+import { head } from '../lib/storage.js';
+import { kv } from '../lib/kv.js';
 
 const HEALTH_BLOB_PATH = 'webcam-health.json';
 
@@ -84,19 +84,19 @@ export default async function handler(req, res) {
     // Skaping URL helper (uses our proxy with compression)
     // server param: 'data' (default), 'data2', 'data3', 's3' for different Skaping storage backends
     const skaping = (path, server = 'data') =>
-      `https://anemouest-api.vercel.app/api/skaping?path=${encodeURIComponent(path)}${server !== 'data' ? `&server=${server}` : ''}`;
+      `https://api.levent.live/api/skaping?path=${encodeURIComponent(path)}${server !== 'data' ? `&server=${server}` : ''}`;
 
     // Viewsurf URL helper (uses our proxy with compression)
     const viewsurf = (id) =>
-      `https://anemouest-api.vercel.app/api/viewsurf?id=${id}`;
+      `https://api.levent.live/api/viewsurf?id=${id}`;
 
     // Viewsurf Stream URL helper (for webcams with HLS streams - fresher images)
     const viewsurfStream = (streamId) =>
-      `https://anemouest-api.vercel.app/api/viewsurf-stream?id=${streamId}`;
+      `https://api.levent.live/api/viewsurf-stream?id=${streamId}`;
 
     // Vision-Environnement URL helper (uses our proxy with compression)
     const vision = (slug) =>
-      `https://anemouest-api.vercel.app/api/vision?slug=${slug}`;
+      `https://api.levent.live/api/vision?slug=${slug}`;
 
     // YouTube live webcam thumbnail helper
     const youtube = (videoId) =>
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
 
     // WindsUp webcam proxy helper (dynamic image URLs require scraping)
     const windsup = (camId) =>
-      `https://anemouest-api.vercel.app/api/windsup-webcam?id=${camId}`;
+      `https://api.levent.live/api/windsup-webcam?id=${camId}`;
 
     const webcams = [
       // ═══════════════════════════════════════════════════════════
@@ -653,7 +653,7 @@ export default async function handler(req, res) {
       const encodedStreamUrl = encodeURIComponent(w.streamUrl);
       return {
         ...w,
-        imageUrl: `https://anemouest-api.vercel.app/api/viewsurf-stream?id=${w.id}&streamUrl=${encodedStreamUrl}`
+        imageUrl: `https://api.levent.live/api/viewsurf-stream?id=${w.id}&streamUrl=${encodedStreamUrl}`
       };
     });
 

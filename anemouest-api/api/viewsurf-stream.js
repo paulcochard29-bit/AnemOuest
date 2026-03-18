@@ -3,7 +3,7 @@
 // Approach: Fetch TS segment, extract I-frame, convert to JPEG
 // Fallback: Store TS segment for client-side playback
 
-import { put, list } from '@vercel/blob';
+import { put, list } from '../lib/storage.js';
 import sharp from 'sharp';
 
 // MPEG-TS packet size

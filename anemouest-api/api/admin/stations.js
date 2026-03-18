@@ -10,11 +10,11 @@
 //   POST /api/admin/stations              - Add custom station
 //   DELETE /api/admin/stations?id=stableId - Hide base station or delete custom
 
-import { kv } from '@vercel/kv';
+import { kv } from '../../lib/kv.js';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.CRON_SECRET;
-const API_BASE = 'https://anemouest-api.vercel.app/api';
-const API2_BASE = 'https://anemouest-api-2.vercel.app/api';
+const API_BASE = 'http://localhost:3001/api';
+const API2_BASE = 'http://localhost:3001/api/mf2';
 const FFVL_API = 'https://data.ffvl.fr/json/balises.json';
 
 const KV_OVERRIDES = 'station_overrides';

@@ -3,15 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-
-const API_BASE = 'https://anemouest-api.vercel.app/api';
+import { API as API_BASE } from '@/lib/api';
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoicGF1bDI5OTAwIiwiYSI6ImNta2Nvc3R6YjAzYjczZXM2Y2g3YmZkcTQifQ.CNTSppufgvTp0wQu9gKsgw';
 
 // ============================================================
 // TYPES
 // ============================================================
 
-type AdminTab = 'webcams' | 'kite' | 'surf' | 'stations' | 'config' | 'ai';
+type AdminTab = 'webcams' | 'kite' | 'surf' | 'stations' | 'config' | 'ai' | 'server' | 'apikeys';
 
 interface Webcam {
   id: string;
@@ -480,7 +479,7 @@ function LoginGate({ onLogin }: { onLogin: (pw: string) => void }) {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
       <form onSubmit={handleLogin} className="bg-[#1a1a1a] p-8 rounded-2xl border border-white/10 w-96">
-        <h1 className="text-xl font-bold text-white mb-6">Admin AnemOuest</h1>
+        <h1 className="text-xl font-bold text-white mb-6">Admin Le Vent</h1>
         <input
           type="password"
           value={pw}
@@ -1291,6 +1290,396 @@ function StationCard({
 // ============================================================
 // APP CONFIG PANEL
 // ============================================================
+
+// ============================================================
+// API KEYS DASHBOARD
+// ============================================================
+interface ApiKeyData {
+  id: string; name: string; key: string; permissions: string;
+  rateLimit: number; createdAt: string; lastUsed: string | null;
+  requestCount: number; active: boolean;
+}
+
+function ApiKeysDashboard({ password }: { password: string }) {
+  const [keys, setKeys] = useState<ApiKeyData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPerms, setNewPerms] = useState('read');
+  const [newRate, setNewRate] = useState(120);
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const headers = { Authorization: `Bearer ${password}`, 'Content-Type': 'application/json' };
+
+  const fetchKeys = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/api-keys?action=list`, { headers: { Authorization: `Bearer ${password}` } });
+      if (res.ok) { const d = await res.json(); setKeys(d.keys || []); }
+    } catch {} finally { setLoading(false); }
+  }, [password]);
+
+  useEffect(() => { fetchKeys(); }, [fetchKeys]);
+
+  const createKey = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/api-keys?action=create`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ name: newName, permissions: newPerms, rateLimit: newRate }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNewKey(data.key);
+        setNewName('');
+        fetchKeys();
+      }
+    } catch {} finally { setCreating(false); }
+  };
+
+  const toggleKey = async (id: string, active: boolean) => {
+    await fetch(`${API_BASE}/admin/api-keys?action=update&id=${id}`, {
+      method: 'PUT', headers, body: JSON.stringify({ active }),
+    });
+    fetchKeys();
+  };
+
+  const deleteKey = async (id: string) => {
+    if (!confirm('Supprimer cette cle API ?')) return;
+    await fetch(`${API_BASE}/admin/api-keys?action=delete&id=${id}`, { method: 'DELETE', headers });
+    fetchKeys();
+  };
+
+  const copyKey = (key: string) => {
+    navigator.clipboard.writeText(key);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (loading) return <div className="flex items-center justify-center h-full text-white/30">Chargement...</div>;
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Info banner */}
+      <div className="bg-cyan-900/20 border border-cyan-500/30 rounded-xl p-4">
+        <div className="text-cyan-300 text-sm font-medium mb-1">Authentification API</div>
+        <div className="text-white/50 text-xs leading-relaxed">
+          Quand des cles sont actives, tous les endpoints publics requierent une cle API.<br/>
+          Passez la cle via le header <code className="bg-white/10 px-1 rounded">X-Api-Key</code> ou le parametre <code className="bg-white/10 px-1 rounded">?apikey=</code><br/>
+          Sans aucune cle configuree, l'API reste ouverte. Les endpoints admin gardent leur propre auth.
+        </div>
+      </div>
+
+      {/* New key created modal */}
+      {newKey && (
+        <div className="bg-green-900/30 border border-green-500/40 rounded-xl p-4">
+          <div className="text-green-300 text-sm font-medium mb-2">Cle creee avec succes</div>
+          <div className="text-white/70 text-xs mb-2">Copiez cette cle maintenant, elle ne sera plus affichee en entier :</div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-black/40 p-3 rounded-lg text-green-300 text-sm font-mono break-all select-all">
+              {newKey}
+            </code>
+            <button onClick={() => copyKey(newKey)}
+              className="px-3 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-xs text-white shrink-0 transition">
+              {copied ? 'Copie !' : 'Copier'}
+            </button>
+          </div>
+          <button onClick={() => setNewKey(null)} className="mt-3 text-white/30 text-xs hover:text-white">Fermer</button>
+        </div>
+      )}
+
+      {/* Create new key */}
+      <div className="bg-white/5 rounded-xl border border-white/10 p-4">
+        <h2 className="text-white font-semibold mb-4">Nouvelle cle API</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="md:col-span-1">
+            <label className="text-white/40 text-xs block mb-1">Nom</label>
+            <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
+              placeholder="iOS App, Web, Partenaire..."
+              className="w-full p-2 rounded-lg bg-[#2a2a2a] text-white text-sm border border-white/10 outline-none focus:border-cyan-500" />
+          </div>
+          <div>
+            <label className="text-white/40 text-xs block mb-1">Permissions</label>
+            <select value={newPerms} onChange={e => setNewPerms(e.target.value)}
+              className="w-full p-2 rounded-lg bg-[#2a2a2a] text-white text-sm border border-white/10 outline-none">
+              <option value="read">Lecture seule</option>
+              <option value="write">Lecture + Ecriture</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-white/40 text-xs block mb-1">Rate limit (req/min)</label>
+            <input type="number" value={newRate} onChange={e => setNewRate(Number(e.target.value))}
+              className="w-full p-2 rounded-lg bg-[#2a2a2a] text-white text-sm border border-white/10 outline-none focus:border-cyan-500" />
+          </div>
+          <div className="flex items-end">
+            <button onClick={createKey} disabled={creating || !newName.trim()}
+              className="w-full p-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 text-sm text-white font-medium transition">
+              {creating ? '...' : 'Generer'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Keys list */}
+      <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <h2 className="text-white font-semibold">Cles actives ({keys.length})</h2>
+          {keys.length === 0 && <span className="text-yellow-400/60 text-xs">API ouverte (aucune cle)</span>}
+        </div>
+        {keys.length === 0 ? (
+          <div className="p-8 text-center text-white/30 text-sm">
+            Aucune cle API. L'API est actuellement accessible sans authentification.
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead><tr className="text-white/40 text-xs border-b border-white/5">
+              <th className="text-left p-3">Nom</th><th className="text-left p-3">Cle</th>
+              <th className="text-left p-3">Permissions</th><th className="text-right p-3">Rate</th>
+              <th className="text-right p-3">Requetes</th><th className="text-right p-3">Dernier usage</th><th className="p-3"></th>
+            </tr></thead>
+            <tbody>
+              {keys.map(k => (
+                <tr key={k.id} className={`border-b border-white/5 hover:bg-white/5 ${!k.active ? 'opacity-40' : ''}`}>
+                  <td className="p-3 text-white font-medium">{k.name}</td>
+                  <td className="p-3 font-mono text-white/40 text-xs">{k.key}</td>
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded text-xs ${
+                      k.permissions === 'admin' ? 'bg-red-900/50 text-red-400' :
+                      k.permissions === 'write' ? 'bg-orange-900/50 text-orange-400' :
+                      'bg-cyan-900/50 text-cyan-400'
+                    }`}>{k.permissions}</span>
+                  </td>
+                  <td className="p-3 text-right text-white/60">{k.rateLimit}/min</td>
+                  <td className="p-3 text-right text-white/60">{k.requestCount?.toLocaleString() || 0}</td>
+                  <td className="p-3 text-right text-white/40 text-xs">
+                    {k.lastUsed ? new Date(k.lastUsed).toLocaleString('fr', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Jamais'}
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="flex gap-1 justify-end">
+                      <button onClick={() => toggleKey(k.id, !k.active)}
+                        className={`px-2 py-1 rounded text-xs transition ${k.active ? 'bg-yellow-700 hover:bg-yellow-600' : 'bg-green-700 hover:bg-green-600'}`}>
+                        {k.active ? 'Desactiver' : 'Activer'}
+                      </button>
+                      <button onClick={() => deleteKey(k.id)}
+                        className="px-2 py-1 rounded bg-red-800 hover:bg-red-700 text-xs transition">
+                        Suppr
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Usage instructions */}
+      <div className="bg-white/5 rounded-xl border border-white/10 p-4">
+        <h2 className="text-white font-semibold mb-3">Utilisation</h2>
+        <div className="space-y-3 text-xs font-mono">
+          <div>
+            <div className="text-white/40 mb-1"># Via header (recommande)</div>
+            <code className="text-cyan-300">curl -H "X-Api-Key: lv_xxxxx" https://api.levent.live/api/pioupiou</code>
+          </div>
+          <div>
+            <div className="text-white/40 mb-1"># Via query param</div>
+            <code className="text-cyan-300">https://api.levent.live/api/pioupiou?apikey=lv_xxxxx</code>
+          </div>
+          <div>
+            <div className="text-white/40 mb-1"># iOS / Swift</div>
+            <code className="text-cyan-300">request.setValue("lv_xxxxx", forHTTPHeaderField: "X-Api-Key")</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// SERVER DASHBOARD
+// ============================================================
+function ServerDashboard({ password }: { password: string }) {
+  const [status, setStatus] = useState<any>(null);
+  const [crons, setCrons] = useState<any>(null);
+  const [logs, setLogs] = useState('');
+  const [logProcess, setLogProcess] = useState('api');
+  const [loading, setLoading] = useState(true);
+  const [restarting, setRestarting] = useState('');
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/server?action=status`, { headers: { Authorization: `Bearer ${password}` } });
+      if (res.ok) setStatus(await res.json());
+    } catch {}
+  }, [password]);
+
+  const fetchCrons = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/server?action=crons`, { headers: { Authorization: `Bearer ${password}` } });
+      if (res.ok) setCrons(await res.json());
+    } catch {}
+  }, [password]);
+
+  const fetchLogs = useCallback(async (proc = logProcess) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/server?action=logs&process=${proc}&lines=80`, { headers: { Authorization: `Bearer ${password}` } });
+      if (res.ok) { const d = await res.json(); setLogs(d.logs || ''); }
+    } catch {}
+  }, [password, logProcess]);
+
+  const restartProcess = async (proc: string) => {
+    setRestarting(proc);
+    try {
+      await fetch(`${API_BASE}/admin/server?action=restart&process=${proc}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${password}` }
+      });
+      setTimeout(() => { fetchStatus(); setRestarting(''); }, 3000);
+    } catch { setRestarting(''); }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([fetchStatus(), fetchCrons(), fetchLogs()]).then(() => setLoading(false));
+    intervalRef.current = setInterval(fetchStatus, 10000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [fetchStatus, fetchCrons, fetchLogs]);
+
+  const fmtBytes = (b: number) => b > 1e9 ? (b/1e9).toFixed(1)+'G' : b > 1e6 ? Math.round(b/1e6)+'M' : Math.round(b/1e3)+'K';
+  const fmtUptime = (ms: number) => { const s = Math.floor(ms/1000); const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); return h > 24 ? Math.floor(h/24)+'j '+h%24+'h' : h+'h '+m+'m'; };
+
+  if (loading) return <div className="flex items-center justify-center h-full text-white/30">Chargement...</div>;
+
+  const s = status;
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* System Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-white/40 text-xs mb-1">CPU</div>
+          <div className="text-2xl font-bold text-white">{s?.cpu?.avgPercent}%</div>
+          <div className="text-white/30 text-xs">{s?.cpu?.cores} core &middot; load {s?.cpu?.loadAvg?.[0]}</div>
+          <div className="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{width:`${s?.cpu?.avgPercent}%`, background: s?.cpu?.avgPercent > 80 ? '#ef4444' : s?.cpu?.avgPercent > 50 ? '#f59e0b' : '#22c55e'}} />
+          </div>
+        </div>
+        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-white/40 text-xs mb-1">RAM</div>
+          <div className="text-2xl font-bold text-white">{s?.memory?.percent}%</div>
+          <div className="text-white/30 text-xs">{fmtBytes(s?.memory?.used||0)} / {fmtBytes(s?.memory?.total||0)}</div>
+          <div className="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{width:`${s?.memory?.percent}%`, background: s?.memory?.percent > 80 ? '#ef4444' : s?.memory?.percent > 50 ? '#f59e0b' : '#22c55e'}} />
+          </div>
+        </div>
+        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-white/40 text-xs mb-1">Disque</div>
+          <div className="text-2xl font-bold text-white">{s?.disk?.percent}</div>
+          <div className="text-white/30 text-xs">{s?.disk?.used} / {s?.disk?.total}</div>
+          <div className="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{width: s?.disk?.percent || '0%', background: parseInt(s?.disk?.percent) > 80 ? '#ef4444' : '#22c55e'}} />
+          </div>
+        </div>
+        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-white/40 text-xs mb-1">Uptime</div>
+          <div className="text-2xl font-bold text-white">{fmtUptime((s?.system?.uptime||0)*1000)}</div>
+          <div className="text-white/30 text-xs">Node {s?.system?.nodeVersion}</div>
+          <div className="mt-2 flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-green-400 text-xs">Online</span>
+          </div>
+        </div>
+      </div>
+
+      {/* PM2 Processes */}
+      <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <h2 className="text-white font-semibold">Processus PM2</h2>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${s?.redis?.connected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-white/40 text-xs">Redis {s?.redis?.connected ? s?.redis?.memory+' / '+s?.redis?.keys+' keys' : 'offline'}</span>
+            <span className="text-white/20 mx-1">|</span>
+            <span className={`w-2 h-2 rounded-full ${s?.r2?.configured ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-white/40 text-xs">R2 {s?.r2?.bucket}</span>
+          </div>
+        </div>
+        <table className="w-full text-sm">
+          <thead><tr className="text-white/40 text-xs border-b border-white/5">
+            <th className="text-left p-3">Nom</th><th className="text-left p-3">Status</th><th className="text-right p-3">CPU</th>
+            <th className="text-right p-3">RAM</th><th className="text-right p-3">Uptime</th><th className="text-right p-3">Restarts</th><th className="p-3"></th>
+          </tr></thead>
+          <tbody>
+            {s?.pm2?.map((p: any) => (
+              <tr key={p.name} className="border-b border-white/5 hover:bg-white/5">
+                <td className="p-3 text-white font-medium">{p.name}</td>
+                <td className="p-3">
+                  <span className={`px-2 py-0.5 rounded text-xs ${p.status === 'online' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                    {p.status}
+                  </span>
+                </td>
+                <td className="p-3 text-right text-white/60">{p.cpu}%</td>
+                <td className="p-3 text-right text-white/60">{fmtBytes(p.memory)}</td>
+                <td className="p-3 text-right text-white/60">{fmtUptime(p.uptime)}</td>
+                <td className="p-3 text-right text-white/60">{p.restarts}</td>
+                <td className="p-3 text-right">
+                  <button onClick={() => restartProcess(p.name)} disabled={restarting === p.name}
+                    className="px-2 py-1 rounded bg-orange-700 hover:bg-orange-600 disabled:opacity-50 text-xs text-white transition">
+                    {restarting === p.name ? '...' : 'Restart'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Cron Jobs */}
+      <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+        <div className="p-4 border-b border-white/10">
+          <h2 className="text-white font-semibold">Cron Jobs</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+          {crons?.crons?.map((c: any, i: number) => {
+            const recent = crons?.recentExecutions?.filter((e: any) => c.name.includes(e.name)).slice(-1)[0];
+            const ok = recent?.status === 200;
+            return (
+              <div key={i} className="flex items-center gap-3 p-3 border-b border-white/5">
+                <span className={`w-2 h-2 rounded-full ${recent ? (ok ? 'bg-green-500' : 'bg-red-500') : 'bg-white/20'}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-sm font-medium">{c.desc}</div>
+                  <div className="text-white/30 text-xs font-mono">{c.schedule}</div>
+                </div>
+                {recent && (
+                  <span className={`text-xs ${ok ? 'text-green-400' : 'text-red-400'}`}>{recent.status}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Logs */}
+      <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+        <div className="p-4 border-b border-white/10 flex items-center gap-3">
+          <h2 className="text-white font-semibold">Logs</h2>
+          <div className="flex gap-1">
+            {['api', 'web'].map(p => (
+              <button key={p} onClick={() => { setLogProcess(p); fetchLogs(p); }}
+                className={`px-3 py-1 rounded text-xs transition ${logProcess === p ? 'bg-cyan-700 text-white' : 'bg-white/10 text-white/40'}`}>
+                {p}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => fetchLogs()} className="ml-auto px-2 py-1 rounded bg-white/10 text-white/40 text-xs hover:text-white transition">Refresh</button>
+        </div>
+        <pre className="p-4 text-xs text-white/60 font-mono overflow-x-auto max-h-[400px] overflow-y-auto whitespace-pre-wrap">
+          {logs || 'No logs'}
+        </pre>
+      </div>
+    </div>
+  );
+}
 
 function AppConfigPanel({
   config, onSave, saving
@@ -2255,6 +2644,8 @@ export default function AdminPage() {
     { key: 'stations', label: 'Stations', count: stations.length },
     { key: 'config', label: 'Config' },
     { key: 'ai', label: 'IA', badge: pendingAiCount },
+    { key: 'server', label: 'Serveur' },
+    { key: 'apikeys', label: 'API Keys' },
   ];
 
   function renderSidebar() {
@@ -2841,6 +3232,18 @@ export default function AdminPage() {
             ) : (
               <AppConfigPanel config={appConfig} onSave={handleSaveConfig} saving={saving} />
             )}
+          </div>
+        )}
+
+        {activeTab === 'server' && (
+          <div className="absolute inset-0 bg-[#0a0a0a] z-20 overflow-y-auto">
+            <ServerDashboard password={password} />
+          </div>
+        )}
+
+        {activeTab === 'apikeys' && (
+          <div className="absolute inset-0 bg-[#0a0a0a] z-20 overflow-y-auto">
+            <ApiKeysDashboard password={password} />
           </div>
         )}
       </div>

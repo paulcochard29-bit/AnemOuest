@@ -1,21 +1,21 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { SOURCE_COLORS, type WindStation } from '@/store/appStore'
 import { getWindColor, getWindColorDark, degToCompassFR } from '@/lib/utils'
-
-const API = 'https://anemouest-api.vercel.app/api'
+import { API, apiFetch } from '@/lib/api'
 
 interface Props {
   station: WindStation
   expanded: boolean
   onExpand: () => void
+  onForecast?: (lat: number, lon: number, name: string) => void
 }
 
-interface ChartPoint { time: string; wind: number; gust: number; dir?: number }
+interface ChartPoint { time: string; wind: number; gust: number; dir?: number; rawTs?: number }
 
-export function StationPopupContent({ station, expanded, onExpand }: Props) {
+export function StationPopupContent({ station, expanded, onExpand, onForecast }: Props) {
   const wc = getWindColor(station.wind)
   const wcDark = getWindColorDark(station.wind)
   const compass = degToCompassFR(station.direction)
@@ -36,15 +36,32 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
       : station.source === 'diabox' ? 'diabox'
       : 'pioupiou'
     setLoading(true)
-    fetch(`${API}/${endpoint}?history=${station.id}&hours=${h}`)
+    let url = `${API}/${endpoint}?history=${station.id}&hours=${h}`
+    if (endpoint === 'windsup') {
+      const token = localStorage.getItem('windsupToken')
+      if (token) url += `&token=${encodeURIComponent(token)}`
+    }
+    apiFetch(url)
       .then(r => r.json())
       .then(data => {
-        setHistory((data.observations || []).map((o: any) => ({
-          time: new Date(o.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          wind: Math.round(o.wind * 10) / 10,
-          gust: Math.round(o.gust * 10) / 10,
-          dir: o.direction ?? o.dir,
-        })))
+        // For multi-day views, downsample to keep chart readable
+        let observations = data.observations || []
+        if (h >= 48 && observations.length > 200) {
+          const step = Math.ceil(observations.length / 200)
+          observations = observations.filter((_: any, i: number) => i % step === 0)
+        }
+        setHistory(observations.map((o: any) => {
+          const d = new Date(o.ts)
+          return {
+            time: h >= 48
+              ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+              : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            wind: Math.round(o.wind * 10) / 10,
+            gust: Math.round(o.gust * 10) / 10,
+            dir: o.direction ?? o.dir,
+            rawTs: d.getTime(),
+          }
+        }))
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -61,6 +78,22 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
     else freshness = `il y a ${Math.floor(diffMin / 60)}h`
   }
 
+  // Find midnight crossings for day separators
+  const midnights = history.reduce<{ time: string; label: string }[]>((acc, pt, i) => {
+    if (i === 0 || !pt.rawTs || !history[i - 1].rawTs) return acc
+    const prevDate = new Date(history[i - 1].rawTs!).getDate()
+    const curDate = new Date(pt.rawTs!).getDate()
+    if (curDate !== prevDate) {
+      const dayName = new Date(pt.rawTs!).toLocaleDateString('fr-FR', { weekday: 'short' })
+      acc.push({ time: pt.time, label: dayName })
+    }
+    return acc
+  }, [])
+
+  // Pick ~6 evenly spaced tick indices for X axis
+  const tickInterval = history.length > 0 ? Math.max(1, Math.floor(history.length / 6)) : 1
+  const chartHeight = hours >= 48 ? 56 : 40 // taller chart for long history
+
   const hasTemp = station.temperature !== undefined && station.temperature !== 0
   const hasHumidity = station.humidity !== undefined && station.humidity !== 0
   const hasPressure = station.pressure !== undefined && station.pressure !== 0
@@ -69,14 +102,17 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
     <div>
       {/* Hero */}
       <div className="px-4 py-3 relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${wc}, ${wcDark})` }}>
-        <div className="flex items-center justify-between">
+        <div className="glass-hero-shimmer" />
+        <div className="flex items-center justify-between relative">
           <div>
             <div className="text-[13px] font-semibold text-white/80 truncate max-w-[180px]">{station.name}</div>
             <div className="flex items-baseline gap-2 mt-0.5">
               <span className="text-[32px] font-black text-white leading-none">{Math.round(station.wind)}</span>
               <span className="text-[13px] font-bold text-white/60">nds</span>
-              <span className="text-white/40 text-[10px]">&bull;</span>
-              <span className="text-[20px] font-bold text-white/80">{Math.round(station.gust)}</span>
+              {station.source !== 'ndbc' && <>
+                <span className="text-white/40 text-[10px]">&bull;</span>
+                <span className="text-[20px] font-bold text-white/80">{Math.round(station.gust)}</span>
+              </>}
             </div>
           </div>
           <div className="flex flex-col items-center gap-1">
@@ -92,16 +128,26 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
       <div className="px-3 pt-2 pb-1">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-bold text-[#8e8e93] uppercase tracking-wider">Historique</span>
-          <div className="flex bg-[#f2f2f7] rounded-lg p-0.5">
-            {[3, 6, 12, 24].map(h => (
+          <div className="flex rounded-full p-0.5" style={{
+            background: 'color-mix(in srgb, #007aff 6%, transparent)',
+            backdropFilter: 'blur(12px) saturate(150%)',
+            WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+            boxShadow: 'inset 0 0 0 1px color-mix(in srgb, #007aff 12%, transparent), inset 0 1px 0 0 rgba(255,255,255,0.15)',
+          }}>
+            {[3, 6, 12, 24, 48, 168].map(h => (
               <button key={h} onClick={() => setHours(h)}
-                className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition ${hours === h ? 'bg-white text-[#1c1c1e] shadow-sm' : 'text-[#8e8e93]'}`}>
-                {h}h
+                className="px-2 py-0.5 text-[10px] font-bold rounded-full transition-all duration-200"
+                style={hours === h ? {
+                  background: '#007aff',
+                  color: '#fff',
+                  boxShadow: '0 2px 8px rgba(0,122,255,0.35), inset 0 1px 0 rgba(255,255,255,0.25)',
+                } : { color: '#8e8e93' }}>
+                {h <= 48 ? `${h}h` : `${h / 24}j`}
               </button>
             ))}
           </div>
         </div>
-        <div className="h-28">
+        <div style={{ height: chartHeight * 4 }}>
           {loading ? (
             <div className="w-full h-full flex items-center justify-center">
               <div className="w-4 h-4 border-2 border-[#e5e5ea] border-t-[#007aff] rounded-full animate-spin" />
@@ -120,10 +166,13 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
-                <XAxis dataKey="time" tick={{ fill: '#8e8e93', fontSize: 9 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fill: '#8e8e93', fontSize: 9 }} tickLine={false} axisLine={false} width={28} />
+                <XAxis dataKey="time" tick={{ fill: '#8e8e93', fontSize: 9 }} tickLine={false} axisLine={false} interval={tickInterval} />
+                <YAxis tick={{ fill: '#8e8e93', fontSize: 9 }} tickLine={false} axisLine={false} width={28} domain={[0, 'auto']} />
                 <Tooltip content={<WindTooltip />} />
-                <Area type="monotone" dataKey="gust" stroke="#ff3b30" strokeWidth={1.5} fill="url(#pgg)" dot={false} name="Rafales" />
+                {midnights.map(m => (
+                  <ReferenceLine key={m.time} x={m.time} stroke="#c7c7cc" strokeDasharray="4 3" strokeWidth={1} label={{ value: m.label, position: 'top', fill: '#8e8e93', fontSize: 9, fontWeight: 600 }} />
+                ))}
+                {station.source !== 'ndbc' && <Area type="monotone" dataKey="gust" stroke="#ff3b30" strokeWidth={1.5} fill="url(#pgg)" dot={false} name="Rafales" />}
                 <Area type="monotone" dataKey="wind" stroke="#007aff" strokeWidth={2} fill="url(#pwg)" dot={false} name="Vent" />
               </AreaChart>
             </ResponsiveContainer>
@@ -133,7 +182,7 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
         </div>
         <div className="flex items-center justify-center gap-4 mt-1 text-[10px] font-medium text-[#8e8e93]">
           <div className="flex items-center gap-1"><span className="w-2.5 h-[2px] bg-[#007aff] rounded-full" />Vent</div>
-          <div className="flex items-center gap-1"><span className="w-2.5 h-[2px] bg-[#ff3b30] rounded-full" />Rafales</div>
+          {station.source !== 'ndbc' && <div className="flex items-center gap-1"><span className="w-2.5 h-[2px] bg-[#ff3b30] rounded-full" />Rafales</div>}
         </div>
       </div>
 
@@ -141,19 +190,19 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
       {expanded && (hasTemp || hasHumidity || hasPressure) && (
         <div className="flex gap-1.5 mx-3 mb-2">
           {hasTemp && (
-            <div className="flex-1 bg-[#f2f2f7] rounded-lg px-2 py-1.5 text-center">
+            <div className="flex-1 glass-stat px-2 py-1.5 text-center">
               <div className="text-[9px] font-semibold text-[#8e8e93] uppercase">Temp</div>
               <div className="text-[16px] font-bold text-[#ff9500] tabular-nums">{Math.round(station.temperature!)}°</div>
             </div>
           )}
           {hasHumidity && (
-            <div className="flex-1 bg-[#f2f2f7] rounded-lg px-2 py-1.5 text-center">
+            <div className="flex-1 glass-stat px-2 py-1.5 text-center">
               <div className="text-[9px] font-semibold text-[#8e8e93] uppercase">Humid.</div>
               <div className="text-[16px] font-bold text-[#007aff] tabular-nums">{Math.round(station.humidity!)}%</div>
             </div>
           )}
           {hasPressure && (
-            <div className="flex-1 bg-[#f2f2f7] rounded-lg px-2 py-1.5 text-center">
+            <div className="flex-1 glass-stat px-2 py-1.5 text-center">
               <div className="text-[9px] font-semibold text-[#8e8e93] uppercase">Pression</div>
               <div className="text-[16px] font-bold text-[#5856d6] tabular-nums">{Math.round(station.pressure!)}</div>
             </div>
@@ -163,7 +212,7 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
 
       {/* Data timestamp — shown when expanded */}
       {expanded && station.ts && (
-        <div className="mx-3 mb-2 bg-[#f2f2f7] rounded-lg px-3 py-1.5 flex items-center gap-2">
+        <div className="mx-3 mb-2 glass-stat px-3 py-1.5 flex items-center gap-2">
           <svg className="w-3.5 h-3.5 text-[#8e8e93] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
           <span className="text-[11px] text-[#8e8e93]">
             Données du {new Date(station.ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -171,10 +220,28 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
         </div>
       )}
 
+      {/* Forecast button */}
+      {onForecast && (
+        <div className="mx-3 mb-1.5">
+          <button onClick={() => onForecast(station.lat, station.lon, station.name)}
+            className="w-full py-2.5 rounded-full text-[13px] font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all duration-200"
+            style={{
+              color: '#34c759',
+              background: 'color-mix(in srgb, #34c759 8%, transparent)',
+              backdropFilter: 'blur(12px) saturate(150%)',
+              WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+              boxShadow: 'inset 0 0 0 1px color-mix(in srgb, #34c759 20%, transparent), inset 0 1px 0 0 rgba(255,255,255,0.15), 0 2px 8px rgba(52,199,89,0.1)',
+            }}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l4-9 4 5 4-7 6 11" /></svg>
+            Prévisions multi-modèles
+          </button>
+        </div>
+      )}
+
       {/* Footer */}
-      <div className="px-3 py-2 flex items-center justify-between">
+      <div className="px-3 py-2 flex items-center justify-between glass-footer">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white glass-tag"
             style={{ background: SOURCE_COLORS[station.source] || '#8e8e93' }}>
             {station.source}
           </span>
@@ -182,13 +249,21 @@ export function StationPopupContent({ station, expanded, onExpand }: Props) {
         </div>
         {!expanded ? (
           <button onClick={onExpand}
-            className="text-[12px] font-semibold text-[#007aff] hover:text-[#0056b3] transition flex items-center gap-0.5">
+            className="text-[12px] font-semibold text-[#007aff] px-2.5 py-1 rounded-full glass-action-btn flex items-center gap-0.5"
+            style={{
+              background: 'color-mix(in srgb, #007aff 8%, transparent)',
+              boxShadow: 'inset 0 0 0 0.5px color-mix(in srgb, #007aff 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.15)',
+            }}>
             Voir plus
             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M9 5l7 7-7 7" /></svg>
           </button>
         ) : (
           <button onClick={onExpand}
-            className="text-[12px] font-semibold text-[#8e8e93] hover:text-[#1c1c1e] transition flex items-center gap-0.5">
+            className="text-[12px] font-semibold text-[#8e8e93] px-2.5 py-1 rounded-full glass-action-btn flex items-center gap-0.5"
+            style={{
+              background: 'color-mix(in srgb, var(--text-primary) 5%, transparent)',
+              boxShadow: 'inset 0 0 0 0.5px color-mix(in srgb, var(--text-primary) 10%, transparent), inset 0 1px 0 rgba(255,255,255,0.1)',
+            }}>
             Réduire
             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" d="M6 9l6 6 6-6" /></svg>
           </button>
@@ -206,10 +281,11 @@ function WindTooltip({ active, payload, label }: any) {
 
   return (
     <div style={{
-      background: 'rgba(248,248,250,0.95)', backdropFilter: 'blur(16px)',
-      borderRadius: 10, padding: '4px 10px', border: '0.5px solid rgba(0,0,0,0.06)',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-      display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+      background: 'rgba(248,248,250,0.75)', backdropFilter: 'blur(24px) saturate(1.8)',
+      WebkitBackdropFilter: 'blur(24px) saturate(1.8)',
+      borderRadius: 12, padding: '5px 12px', border: '0.5px solid rgba(255,255,255,0.5)',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 0 0 0.5px rgba(255,255,255,0.3)',
+      display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
       transform: 'translateY(-8px)',
     }}>
       <span style={{ fontSize: 9, color: '#8e8e93', fontWeight: 600 }}>{label}</span>

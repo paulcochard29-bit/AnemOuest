@@ -5,6 +5,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import type { WindStation, WaveBuoy, Webcam, Spot, MapStyle, LayerVisibility, SpotScoreColor } from '@/store/appStore'
 import { getWindColor, getWindColorDark } from '@/lib/utils'
+import { API } from '@/lib/api'
 
 interface MapViewProps {
   stations: WindStation[]
@@ -50,9 +51,10 @@ function filterByDensity<T extends { lat?: number; lon?: number; latitude?: numb
   const ne = bounds.getNorthEast()
   // Filter to visible bounds
   const visible = items.filter(item => {
-    const lat = item.lat ?? item.latitude ?? 0
-    const lon = item.lon ?? item.longitude ?? 0
-    return lat >= sw.lat && lat <= ne.lat && lon >= sw.lng && lon <= ne.lng
+    const lat = item.lat ?? item.latitude
+    const lon = item.lon ?? item.longitude
+    if (!isFinite(lat as number) || !isFinite(lon as number)) return false
+    return (lat as number) >= sw.lat && (lat as number) <= ne.lat && (lon as number) >= sw.lng && (lon as number) <= ne.lng
   })
   if (visible.length <= targetCount) return visible
   // Calculate dynamic grid size
@@ -72,6 +74,38 @@ function filterByDensity<T extends { lat?: number; lon?: number; latitude?: numb
   return Object.values(grid)
 }
 
+/** Cluster stations: returns representative station + count + avg wind for each grid cell */
+function clusterStations(
+  stations: WindStation[],
+  bounds: mapboxgl.LngLatBounds,
+  targetCount: number,
+): { station: WindStation; count: number; avgWind: number; avgGust: number }[] {
+  const sw = bounds.getSouthWest()
+  const ne = bounds.getNorthEast()
+  const visible = stations.filter(s => s.lat >= sw.lat && s.lat <= ne.lat && s.lon >= sw.lng && s.lon <= ne.lng)
+  if (visible.length <= targetCount) return visible.map(s => ({ station: s, count: 1, avgWind: s.wind, avgGust: s.gust }))
+  const latRange = ne.lat - sw.lat
+  const lonRange = ne.lng - sw.lng
+  const cellsPerAxis = Math.max(2, Math.floor(Math.sqrt(targetCount)))
+  const gridLat = latRange / cellsPerAxis
+  const gridLon = lonRange / cellsPerAxis
+  const grid: Record<string, { best: WindStation; items: WindStation[] }> = {}
+  for (const s of visible) {
+    const key = `${Math.floor(s.lat / gridLat)},${Math.floor(s.lon / gridLon)}`
+    if (!grid[key]) grid[key] = { best: s, items: [s] }
+    else {
+      grid[key].items.push(s)
+      if (s.wind > grid[key].best.wind) grid[key].best = s
+    }
+  }
+  return Object.values(grid).map(g => ({
+    station: g.best,
+    count: g.items.length,
+    avgWind: Math.round(g.items.reduce((sum, s) => sum + s.wind, 0) / g.items.length),
+    avgGust: Math.round(g.items.reduce((sum, s) => sum + s.gust, 0) / g.items.length),
+  }))
+}
+
 function filterByDensityWithCounts<T extends { lat?: number; lon?: number; latitude?: number; longitude?: number }>(
   items: T[],
   bounds: mapboxgl.LngLatBounds,
@@ -80,9 +114,10 @@ function filterByDensityWithCounts<T extends { lat?: number; lon?: number; latit
   const sw = bounds.getSouthWest()
   const ne = bounds.getNorthEast()
   const visible = items.filter(item => {
-    const lat = item.lat ?? item.latitude ?? 0
-    const lon = item.lon ?? item.longitude ?? 0
-    return lat >= sw.lat && lat <= ne.lat && lon >= sw.lng && lon <= ne.lng
+    const lat = item.lat ?? item.latitude
+    const lon = item.lon ?? item.longitude
+    if (!isFinite(lat as number) || !isFinite(lon as number)) return false
+    return (lat as number) >= sw.lat && (lat as number) <= ne.lat && (lon as number) >= sw.lng && (lon as number) <= ne.lng
   })
   if (visible.length <= targetCount) return visible.map(item => ({ item, count: 1 }))
   const latRange = ne.lat - sw.lat
@@ -119,6 +154,7 @@ export function MapView({
       style: STYLE_URLS[mapStyle],
       center: [-3.5, 47.5],
       zoom: 7,
+      projection: 'mercator',
       attributionControl: false,
     })
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right')
@@ -161,6 +197,7 @@ export function MapView({
     else map.once('style.load', applyRadar)
   }, [radarTileUrl])
 
+
   const clearMarkers = useCallback((prefix: string) => {
     markersRef.current.forEach((marker, key) => {
       if (key.startsWith(prefix)) {
@@ -189,16 +226,16 @@ export function MapView({
     return () => { map.off('moveend', update); map.off('zoomend', update) }
   }, [])
 
-  // Wind stations
+  // Wind stations (with clustering)
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
     clearMarkers('wind-')
     const bounds = map.getBounds()
     if (!bounds) return
-    const onlineStations = stations.filter(s => s.isOnline)
-    const visible = filterByDensity(onlineStations, bounds, 80, (a, b) => b.wind > a.wind ? b : a)
-    for (const s of visible) {
+    const onlineStations = stations.filter(s => s.isOnline && isFinite(s.lat) && isFinite(s.lon))
+    const clusters = clusterStations(onlineStations, bounds, 80)
+    for (const { station: s, count, avgWind, avgGust } of clusters) {
       const el = document.createElement('div')
       el.className = 'wind-marker'
       const isSelected = selectedId === s.id
@@ -209,9 +246,9 @@ export function MapView({
           <svg class="arrow" width="18" height="18" viewBox="0 0 18 18" style="transform:rotate(${s.direction+180}deg)"><path d="M9 2L5 15l4-3 4 3z" fill="#fff" stroke="rgba(255,255,255,0.3)" stroke-width="0.5" stroke-linejoin="round"/></svg>
           <div class="vals">
             <span class="avg">${Math.round(s.wind)}</span>
-            <span class="dot">&bull;</span>
-            <span class="gust">${Math.round(s.gust)}</span>
+            ${s.source !== 'ndbc' ? `<span class="dot">&bull;</span><span class="gust">${Math.round(s.gust)}</span>` : ''}
           </div>
+          ${count > 1 ? `<div class="wind-cluster-badge">${count}</div>` : ''}
         </div>
       `
       el.addEventListener('click', (e) => { e.stopPropagation(); onStationClick(s) })
@@ -226,7 +263,7 @@ export function MapView({
     const map = mapRef.current
     if (!map || !layers.buoys) { clearMarkers('buoy-'); return }
     clearMarkers('buoy-')
-    for (const b of buoys) {
+    for (const b of buoys.filter(b => isFinite(b.lat) && isFinite(b.lon))) {
       const el = document.createElement('div')
       el.className = 'buoy-marker'
       const isSelected = selectedId === b.id
@@ -281,7 +318,7 @@ export function MapView({
       }
 
       // Low-res: use webcam-image proxy with redirect for blob-cached images (smaller), fallback to imageUrl
-      const thumbUrl = `https://anemouest-api.vercel.app/api/webcam-image?id=${encodeURIComponent(w.id)}&redirect=true&t=${webcamTick}`
+      const thumbUrl = `${API}/webcam-image?id=${encodeURIComponent(w.id)}&redirect=true&t=${webcamTick}`
 
       el.innerHTML = `
         <div class="webcam-card-img">
@@ -308,11 +345,13 @@ export function MapView({
       if (!img) return
       const id = img.dataset.webcamId
       const fallback = img.dataset.fallback || ''
-      const newUrl = `https://anemouest-api.vercel.app/api/webcam-image?id=${encodeURIComponent(id!)}&redirect=true&t=${webcamTick}`
+      const newUrl = `${API}/webcam-image?id=${encodeURIComponent(id!)}&redirect=true&t=${webcamTick}`
       // Double-buffer: load new image off-screen, swap only when loaded
+      const cardImg = img.closest('.webcam-card-img') as HTMLElement | null
+      img.style.opacity = '0.5'
       const preload = new Image()
-      preload.onload = () => { img.src = newUrl }
-      preload.onerror = () => { img.src = fallback }
+      preload.onload = () => { img.src = newUrl; img.style.opacity = '1' }
+      preload.onerror = () => { img.src = fallback; img.style.opacity = '1' }
       preload.src = newUrl
     })
   }, [webcamTick])
@@ -344,6 +383,7 @@ export function MapView({
       }
     }
   }, [spots, layers, onSpotClick, clearMarkers, mapBounds])
+
 
   return <div ref={containerRef} className="w-full h-full" />
 }

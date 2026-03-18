@@ -6,33 +6,145 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		707406552F598468002FFCB9 /* TelemetryClient in Frameworks */ = {isa = PBXBuildFile; productRef = 707406542F598468002FFCB9 /* TelemetryClient */; };
+		707406572F598468002FFCB9 /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 707406562F598468002FFCB9 /* TelemetryDeck */; };
+		707D12AB2F0BF267002D0623 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 707D12AA2F0BF267002D0623 /* WidgetKit.framework */; };
+		707D12AD2F0BF267002D0623 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 707D12AC2F0BF267002D0623 /* SwiftUI.framework */; };
+		707D12B92F0BF269002D0623 /* AnemOuestWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 707D12A82F0BF267002D0623 /* AnemOuestWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		70DFBD532F27DDD900DC82C8 /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 70DFBD522F27DDD900DC82C8 /* MapboxMaps */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		707D12B72F0BF269002D0623 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 70AAB6E72F0136C800F779C7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 707D12A72F0BF267002D0623;
+			remoteInfo = AnemOuestWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		707D12BA2F0BF269002D0623 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				707D12B92F0BF269002D0623 /* AnemOuestWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		707406632F59CF50002FFCB9 /* AnemOuest Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AnemOuest Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		707D12A82F0BF267002D0623 /* AnemOuestWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AnemOuestWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		707D12AA2F0BF267002D0623 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		707D12AC2F0BF267002D0623 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		707D12CD2F0C2C8A002D0623 /* AnemOuestWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AnemOuestWidgetExtension.entitlements; sourceTree = "<group>"; };
 		70AAB6EF2F0136C800F779C7 /* AnemOuest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AnemOuest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7023B7492F36A7610020744A /* Exceptions for "AnemOuest" folder in "AnemOuestWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+				icon.icon,
+			);
+			target = 707D12A72F0BF267002D0623 /* AnemOuestWidgetExtension */;
+		};
+		707D12BD2F0BF269002D0623 /* Exceptions for "AnemOuestWidget" folder in "AnemOuestWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 707D12A72F0BF267002D0623 /* AnemOuestWidgetExtension */;
+		};
+		708C5C262F32546400A2DBE2 /* Exceptions for "AnemOuest" folder in "AnemOuest" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 70AAB6EE2F0136C800F779C7 /* AnemOuest */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		6A424E39BD6C43B7FF2A8B0C /* AnemOuest Watch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "AnemOuest Watch";
+			sourceTree = "<group>";
+		};
+		707D12AE2F0BF267002D0623 /* AnemOuestWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				707D12BD2F0BF269002D0623 /* Exceptions for "AnemOuestWidget" folder in "AnemOuestWidgetExtension" target */,
+			);
+			path = AnemOuestWidget;
+			sourceTree = "<group>";
+		};
 		70AAB6F12F0136C800F779C7 /* AnemOuest */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				708C5C262F32546400A2DBE2 /* Exceptions for "AnemOuest" folder in "AnemOuest" target */,
+				7023B7492F36A7610020744A /* Exceptions for "AnemOuest" folder in "AnemOuestWidgetExtension" target */,
+			);
 			path = AnemOuest;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		70AAB6EC2F0136C800F779C7 /* Frameworks */ = {
+		707406602F59CF50002FFCB9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		707D12A52F0BF267002D0623 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				707D12AD2F0BF267002D0623 /* SwiftUI.framework in Frameworks */,
+				707D12AB2F0BF267002D0623 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		70AAB6EC2F0136C800F779C7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				70DFBD532F27DDD900DC82C8 /* MapboxMaps in Frameworks */,
+				707406552F598468002FFCB9 /* TelemetryClient in Frameworks */,
+				707406572F598468002FFCB9 /* TelemetryDeck in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		707D12A92F0BF267002D0623 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				707D12AA2F0BF267002D0623 /* WidgetKit.framework */,
+				707D12AC2F0BF267002D0623 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		70AAB6E62F0136C800F779C7 = {
 			isa = PBXGroup;
 			children = (
+				707D12CD2F0C2C8A002D0623 /* AnemOuestWidgetExtension.entitlements */,
 				70AAB6F12F0136C800F779C7 /* AnemOuest */,
+				6A424E39BD6C43B7FF2A8B0C /* AnemOuest Watch */,
+				707D12AE2F0BF267002D0623 /* AnemOuestWidget */,
+				707D12A92F0BF267002D0623 /* Frameworks */,
 				70AAB6F02F0136C800F779C7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +153,8 @@
 			isa = PBXGroup;
 			children = (
 				70AAB6EF2F0136C800F779C7 /* AnemOuest.app */,
+				707D12A82F0BF267002D0623 /* AnemOuestWidgetExtension.appex */,
+				707406632F59CF50002FFCB9 /* AnemOuest Watch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +162,50 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		707406622F59CF50002FFCB9 /* AnemOuest Watch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7074066E2F59CF52002FFCB9 /* Build configuration list for PBXNativeTarget "AnemOuest Watch" */;
+			buildPhases = (
+				7074065F2F59CF50002FFCB9 /* Sources */,
+				707406602F59CF50002FFCB9 /* Frameworks */,
+				707406612F59CF50002FFCB9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6A424E39BD6C43B7FF2A8B0C /* AnemOuest Watch */,
+			);
+			name = "AnemOuest Watch";
+			packageProductDependencies = (
+			);
+			productName = "AnemOuest Watch";
+			productReference = 707406632F59CF50002FFCB9 /* AnemOuest Watch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		707D12A72F0BF267002D0623 /* AnemOuestWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 707D12BE2F0BF269002D0623 /* Build configuration list for PBXNativeTarget "AnemOuestWidgetExtension" */;
+			buildPhases = (
+				707D12A42F0BF267002D0623 /* Sources */,
+				707D12A52F0BF267002D0623 /* Frameworks */,
+				707D12A62F0BF267002D0623 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				707D12AE2F0BF267002D0623 /* AnemOuestWidget */,
+			);
+			name = AnemOuestWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = AnemOuestWidgetExtension;
+			productReference = 707D12A82F0BF267002D0623 /* AnemOuestWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		70AAB6EE2F0136C800F779C7 /* AnemOuest */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 70AAB6FA2F0136CA00F779C7 /* Build configuration list for PBXNativeTarget "AnemOuest" */;
@@ -55,16 +213,21 @@
 				70AAB6EB2F0136C800F779C7 /* Sources */,
 				70AAB6EC2F0136C800F779C7 /* Frameworks */,
 				70AAB6ED2F0136C800F779C7 /* Resources */,
+				707D12BA2F0BF269002D0623 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				707D12B82F0BF269002D0623 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				70AAB6F12F0136C800F779C7 /* AnemOuest */,
 			);
 			name = AnemOuest;
 			packageProductDependencies = (
+				70DFBD522F27DDD900DC82C8 /* MapboxMaps */,
+				707406542F598468002FFCB9 /* TelemetryClient */,
+				707406562F598468002FFCB9 /* TelemetryDeck */,
 			);
 			productName = AnemOuest;
 			productReference = 70AAB6EF2F0136C800F779C7 /* AnemOuest.app */;
@@ -80,31 +243,58 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					707406622F59CF50002FFCB9 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					707D12A72F0BF267002D0623 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					70AAB6EE2F0136C800F779C7 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
 			buildConfigurationList = 70AAB6EA2F0136C800F779C7 /* Build configuration list for PBXProject "AnemOuest" */;
-			developmentRegion = en;
+			developmentRegion = fr;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				fr,
 				en,
 				Base,
 			);
 			mainGroup = 70AAB6E62F0136C800F779C7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				70DFBD512F27DDD900DC82C8 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
+				707406532F598468002FFCB9 /* XCRemoteSwiftPackageReference "SwiftSDK" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 70AAB6F02F0136C800F779C7 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				70AAB6EE2F0136C800F779C7 /* AnemOuest */,
+				707D12A72F0BF267002D0623 /* AnemOuestWidgetExtension */,
+				707406622F59CF50002FFCB9 /* AnemOuest Watch */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		707406612F59CF50002FFCB9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		707D12A62F0BF267002D0623 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		70AAB6ED2F0136C800F779C7 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,6 +305,20 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		7074065F2F59CF50002FFCB9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		707D12A42F0BF267002D0623 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		70AAB6EB2F0136C800F779C7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -124,7 +328,141 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		707D12B82F0BF269002D0623 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 707D12A72F0BF267002D0623 /* AnemOuestWidgetExtension */;
+			targetProxy = 707D12B72F0BF269002D0623 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		7074066F2F59CF52002FFCB9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Le Vent";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKWatchOnly = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Wind.AnemOuest-Watch-Watch-App.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		707406702F59CF52002FFCB9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Le Vent";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKWatchOnly = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Wind.AnemOuest-Watch-Watch-App.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		707D12BF2F0BF269002D0623 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AnemOuestWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AnemOuestWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Le Vent";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = Wind.AnemOuest.AnemOuestWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		707D12C02F0BF269002D0623 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AnemOuestWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AnemOuestWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Le Vent";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = Wind.AnemOuest.AnemOuestWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		70AAB6F82F0136CA00F779C7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -160,6 +498,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 3M762D94NM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -177,12 +516,13 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -223,6 +563,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 3M762D94NM;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -234,11 +575,12 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -247,16 +589,26 @@
 		70AAB6FB2F0136CA00F779C7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = icon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CFBundleDevelopmentRegion = fr;
+				CODE_SIGN_ENTITLEMENTS = AnemOuest/AnemOuest.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3M762D94NM;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AnemOuest/Info.plist;
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "Wind.AnemOuest.windcheck Wind.AnemOuest.dataprocessing";
+				INFOPLIST_KEY_CFBundleDisplayName = "Le Vent";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.weather";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Le Vent utilise votre position pour centrer la carte sur votre zone et afficher les stations de vent les plus proches.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Le Vent enregistre les images de vent dans votre galerie photo.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "fetch processing";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -264,7 +616,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.2;
+				NEW_SETTING1 = "";
 				PRODUCT_BUNDLE_IDENTIFIER = Wind.AnemOuest;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -281,16 +634,26 @@
 		70AAB6FC2F0136CA00F779C7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = icon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CFBundleDevelopmentRegion = fr;
+				CODE_SIGN_ENTITLEMENTS = AnemOuest/AnemOuest.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3M762D94NM;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AnemOuest/Info.plist;
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "Wind.AnemOuest.windcheck Wind.AnemOuest.dataprocessing";
+				INFOPLIST_KEY_CFBundleDisplayName = "Le Vent";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.weather";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Le Vent utilise votre position pour centrer la carte sur votre zone et afficher les stations de vent les plus proches.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Le Vent enregistre les images de vent dans votre galerie photo.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "fetch processing";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -298,7 +661,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.2;
+				NEW_SETTING1 = "";
 				PRODUCT_BUNDLE_IDENTIFIER = Wind.AnemOuest;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -315,6 +679,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		7074066E2F59CF52002FFCB9 /* Build configuration list for PBXNativeTarget "AnemOuest Watch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7074066F2F59CF52002FFCB9 /* Debug */,
+				707406702F59CF52002FFCB9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		707D12BE2F0BF269002D0623 /* Build configuration list for PBXNativeTarget "AnemOuestWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				707D12BF2F0BF269002D0623 /* Debug */,
+				707D12C02F0BF269002D0623 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		70AAB6EA2F0136C800F779C7 /* Build configuration list for PBXProject "AnemOuest" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -334,6 +716,43 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		707406532F598468002FFCB9 /* XCRemoteSwiftPackageReference "SwiftSDK" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/TelemetryDeck/SwiftSDK";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.11.0;
+			};
+		};
+		70DFBD512F27DDD900DC82C8 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mapbox/mapbox-maps-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		707406542F598468002FFCB9 /* TelemetryClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 707406532F598468002FFCB9 /* XCRemoteSwiftPackageReference "SwiftSDK" */;
+			productName = TelemetryClient;
+		};
+		707406562F598468002FFCB9 /* TelemetryDeck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 707406532F598468002FFCB9 /* XCRemoteSwiftPackageReference "SwiftSDK" */;
+			productName = TelemetryDeck;
+		};
+		70DFBD522F27DDD900DC82C8 /* MapboxMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 70DFBD512F27DDD900DC82C8 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
+			productName = MapboxMaps;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 70AAB6E72F0136C800F779C7 /* Project object */;
 }

@@ -5,468 +5,311 @@ import MapKit
 import Charts
 import Combine
 
-// MARK: - GoWind (carte des vents)
-private struct GoWindStation: Decodable {
-    let type: String?
-    let nom: String?
-    let icone: String?
-    let now: String?
-    let id: String
-    let vmaxRaw: String?
-    let vmoyRaw: String?
-    let ortexte: String?
-    let couleur: String?
-    let ordegreRaw: String?
-    let latValue: Double
-    let lonValue: Double
-    let mode: String?
-    let dern_r: Int?
+// MARK: - Map Style Options
 
-    // MARK: - Decoding
-    enum CodingKeys: String, CodingKey {
-        case type, nom, icone, now, id, vmax, vmoy, ortexte, couleur, ordegre, lat, lon, mode, dern_r
-    }
+enum MapStyleOption: String, CaseIterable, Identifiable {
+    case standard = "standard"
+    case satellite = "satellite"
+    case hybrid = "hybrid"
+    case muted = "muted"
 
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        type = try c.decodeIfPresent(String.self, forKey: .type)
-        nom = try c.decodeIfPresent(String.self, forKey: .nom)
-        icone = try c.decodeIfPresent(String.self, forKey: .icone)
-        now = try c.decodeIfPresent(String.self, forKey: .now)
+    var id: String { rawValue }
 
-        // id can be string or number
-        if let s = try c.decodeIfPresent(String.self, forKey: .id) {
-            id = s
-        } else if let n = try c.decodeIfPresent(Int.self, forKey: .id) {
-            id = String(n)
-        } else {
-            id = UUID().uuidString
-        }
-
-        // wind values can be string or number
-        if let s = try c.decodeIfPresent(String.self, forKey: .vmoy) {
-            vmoyRaw = s
-        } else if let n = try c.decodeIfPresent(Double.self, forKey: .vmoy) {
-            vmoyRaw = String(n)
-        } else if let n = try c.decodeIfPresent(Int.self, forKey: .vmoy) {
-            vmoyRaw = String(n)
-        } else {
-            vmoyRaw = nil
-        }
-
-        if let s = try c.decodeIfPresent(String.self, forKey: .vmax) {
-            vmaxRaw = s
-        } else if let n = try c.decodeIfPresent(Double.self, forKey: .vmax) {
-            vmaxRaw = String(n)
-        } else if let n = try c.decodeIfPresent(Int.self, forKey: .vmax) {
-            vmaxRaw = String(n)
-        } else {
-            vmaxRaw = nil
-        }
-
-        ortexte = try c.decodeIfPresent(String.self, forKey: .ortexte)
-        couleur = try c.decodeIfPresent(String.self, forKey: .couleur)
-
-        if let s = try c.decodeIfPresent(String.self, forKey: .ordegre) {
-            ordegreRaw = s
-        } else if let n = try c.decodeIfPresent(Double.self, forKey: .ordegre) {
-            ordegreRaw = String(n)
-        } else if let n = try c.decodeIfPresent(Int.self, forKey: .ordegre) {
-            ordegreRaw = String(n)
-        } else {
-            ordegreRaw = nil
-        }
-
-        // lat/lon can be string or number
-        latValue = Self.decodeDouble(c, .lat)
-        lonValue = Self.decodeDouble(c, .lon)
-
-        mode = try c.decodeIfPresent(String.self, forKey: .mode)
-        dern_r = try c.decodeIfPresent(Int.self, forKey: .dern_r)
-    }
-
-    // MARK: - Fallback dictionary init (very tolerant + recursive key search)
-    init?(dict d: [String: Any]) {
-        // Recursive search for keys anywhere in the JSON object.
-        func findValue(in any: Any, keys: Set<String>, maxDepth: Int = 6) -> Any? {
-            guard maxDepth > 0 else { return nil }
-
-            if let dict = any as? [String: Any] {
-                // Direct hit
-                for (k, v) in dict {
-                    if keys.contains(k.lowercased()) { return v }
-                }
-                // Recurse into children
-                for (_, v) in dict {
-                    if let hit = findValue(in: v, keys: keys, maxDepth: maxDepth - 1) { return hit }
-                }
-            } else if let arr = any as? [Any] {
-                for v in arr {
-                    if let hit = findValue(in: v, keys: keys, maxDepth: maxDepth - 1) { return hit }
-                }
-            }
-            return nil
-        }
-
-        func asString(_ any: Any?) -> String? {
-            guard let any else { return nil }
-            if let s = any as? String { return s }
-            if let n = any as? NSNumber { return n.stringValue }
-            if let i = any as? Int { return String(i) }
-            if let d = any as? Double { return String(d) }
-            return nil
-        }
-
-        func asDouble(_ any: Any?) -> Double? {
-            guard let any else { return nil }
-            if let d = any as? Double { return d }
-            if let n = any as? NSNumber { return n.doubleValue }
-            if let i = any as? Int { return Double(i) }
-            if let s = any as? String {
-                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { return nil }
-
-                // Extract the first numeric token from the string (handles extra chars like ° ' " N/E/W, etc.)
-                var token = ""
-                var started = false
-                for ch in trimmed {
-                    let isAllowed = (ch >= "0" && ch <= "9") || ch == "-" || ch == "." || ch == ","
-                    if isAllowed {
-                        token.append(ch)
-                        started = true
-                    } else if started {
-                        break
-                    }
-                }
-
-                let normalized = token.replacingOccurrences(of: ",", with: ".")
-                if normalized.isEmpty { return nil }
-                return Double(normalized)
-            }
-            return nil
-        }
-
-        func pickString(_ keys: [String]) -> String? {
-            for k in keys {
-                if let v = asString(findValue(in: d, keys: [k.lowercased()])) {
-                    let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !t.isEmpty { return t }
-                }
-            }
-            return nil
-        }
-
-        func pickDouble(_ keys: [String]) -> Double? {
-            for k in keys {
-                if let v = asDouble(findValue(in: d, keys: [k.lowercased()])) {
-                    if v.isFinite { return v }
-                }
-            }
-            return nil
-        }
-
-        func pickInt(_ keys: [String]) -> Int? {
-            for k in keys {
-                if let n = findValue(in: d, keys: [k.lowercased()]) {
-                    if let i = n as? Int { return i }
-                    if let num = n as? NSNumber { return num.intValue }
-                    if let s = n as? String {
-                        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if let i = Int(t) { return i }
-                    }
-                }
-            }
-            return nil
-        }
-
-        // Base fields (try root keys first, then recursive)
-        type = asString(d["type"]) ?? pickString(["type"])
-
-        // Accept both GoWind + Holfuy items from the same feed
-        let rawType = (type ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard rawType.isEmpty || rawType == "gowind" || rawType == "holfuy" else {
-            return nil
-        }
-        nom  = asString(d["nom"])  ?? pickString(["nom", "name", "station", "spot"])
-        icone = asString(d["icone"]) ?? pickString(["icone", "icon"])
-        now   = asString(d["now"])   ?? pickString(["now", "date", "time", "timestamp"])
-
-        // id can be string/number, sometimes missing → fallback to nom
-        let idStr = asString(d["id"]) ?? pickString(["id", "station_id", "uid"]) ?? (nom ?? UUID().uuidString)
-        id = idStr
-
-        // wind values (avg / gust)
-        vmoyRaw = pickString([
-            "vmoy", "ws", "moy", "moyenne", "wind", "wind_avg", "vitesse", "vitesse_moy", "vitesse_moyenne", "speed", "avg"
-        ])
-        vmaxRaw = pickString([
-            "vmax", "gust", "rafale", "wind_gust", "vitesse_max", "vitesse_rafale", "max"
-        ])
-
-        ortexte = pickString(["ortexte", "card", "dir_txt", "direction_txt"])
-        couleur = pickString(["couleur", "color", "couleur_hex"])
-        ordegreRaw = pickString(["ordegre", "dir", "direction", "wd", "bearing", "heading"])
-
-        // coords (often nested) — try direct keys first, then recursive search
-        let lat = asDouble(d["lat"]) ?? asDouble(d["latitude"]) ?? asDouble(d["y"]) ?? pickDouble(["lat", "latitude", "y"])
-        let lon = asDouble(d["lon"]) ?? asDouble(d["lng"]) ?? asDouble(d["longitude"]) ?? asDouble(d["x"]) ?? pickDouble(["lon", "lng", "longitude", "x"])
-
-        latValue = lat ?? 0
-        lonValue = lon ?? 0
-
-        mode = pickString(["mode", "etat", "status"])
-        dern_r = pickInt(["dern_r", "age", "age_min", "age_minutes", "last", "last_min"])
-
-        // Sanity checks: accept only plausible coordinates.
-        if !(latValue >= -90 && latValue <= 90 && lonValue >= -180 && lonValue <= 180) {
-            return nil
-        }
-        // Only reject the exact (0,0) case.
-        if latValue == 0 && lonValue == 0 {
-            return nil
+    var displayName: String {
+        switch self {
+        case .standard: return "Standard"
+        case .satellite: return "Satellite"
+        case .hybrid: return "Hybride"
+        case .muted: return "Nuit"
         }
     }
 
-    private static func decodeDouble(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Double {
-        if let d = try? c.decodeIfPresent(Double.self, forKey: key) { return d ?? 0 }
-        if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(i ?? 0) }
-        if let s = try? c.decodeIfPresent(String.self, forKey: key) {
-            return Double((s ?? "0").replacingOccurrences(of: ",", with: ".")) ?? 0
+    var icon: String {
+        switch self {
+        case .standard: return "map"
+        case .satellite: return "globe.europe.africa.fill"
+        case .hybrid: return "map.fill"
+        case .muted: return "moon.fill"
         }
-        return 0
     }
 
-    // MARK: - Computed
-    private func parse(_ raw: String?) -> Double {
-        guard let raw else { return 0 }
-        let s = raw.replacingOccurrences(of: ",", with: ".")
-        return Double(s) ?? 0
-    }
-
-    var wind: Double { parse(vmoyRaw) }
-    var gust: Double { parse(vmaxRaw) }
-    var dirDeg: Double { parse(ordegreRaw) }
-
-    var coordinate: CLLocationCoordinate2D { .init(latitude: latValue, longitude: lonValue) }
-    var isOnline: Bool { (mode ?? "").uppercased() == "ON" }
-
-    /// GoWind IDs are not guaranteed unique across the whole dataset.
-    /// Use a composite id so SwiftUI ForEach doesn't collapse duplicates.
-    var stableId: String {
-        "\(id)-\(String(format: "%.6f", latValue))-\(String(format: "%.6f", lonValue))"
+    var mkMapType: MKMapType {
+        switch self {
+        case .standard: return .standard
+        case .satellite: return .satellite
+        case .hybrid: return .hybrid
+        case .muted: return .mutedStandard
+        }
     }
 }
 
-@MainActor
-private final class GoWindStore: ObservableObject {
-    @Published var stations: [GoWindStation] = []
-    @Published var lastStatusCode: Int? = nil
-    @Published var lastBytes: Int = 0
-    @Published var lastError: String? = nil
-    @Published var lastTotalItems: Int = 0
-    @Published var lastDecodedItems: Int = 0
-
-    func refresh() async {
-        guard let url = URL(string: "https://gowind.fr/php/anemo/carte_des_vents.json") else { return }
-        var req = URLRequest(url: url)
-        req.timeoutInterval = 15
-        req.cachePolicy = .reloadIgnoringLocalCacheData
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue("AnemOuest/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: req)
-            let status = (response as? HTTPURLResponse)?.statusCode
-            lastStatusCode = status
-            lastBytes = data.count
-            lastError = nil
-
-            let json = try JSONSerialization.jsonObject(with: data, options: [])
-
-            // Collect candidate station JSON objects (robust: array root OR dict root with embedded arrays)
-            var candidates: [Any] = []
-
-            func looksLikeStation(_ obj: Any) -> Bool {
-                guard let d0 = obj as? [String: Any] else { return false }
-
-                // Merge common nested containers where coordinates may live
-                var d = d0
-                let nestedKeys = ["coord", "coords", "position", "pos", "geo", "location", "loc", "station"]
-                for nk in nestedKeys {
-                    if let nested = d0[nk] as? [String: Any] {
-                        for (k, v) in nested { d[k] = v }
-                    }
-                }
-
-                var hasLat = false
-                var hasLon = false
-                var hasWind = false
-
-                for k in d.keys {
-                    let key = k.lowercased()
-                    if key == "lat" || key == "latitude" || key == "y" { hasLat = true }
-                    if key == "lon" || key == "lng" || key == "longitude" || key == "x" { hasLon = true }
-                    if key == "vmoy" || key == "vmax" || key == "wind" || key == "gust" { hasWind = true }
-                }
-
-                // Prefer stations with coords, but keep wind-like objects too and let the tolerant init decide.
-                if hasLat && hasLon { return true }
-                return hasWind
-            }
-
-            if let arr = json as? [Any] {
-                // Array root: keep everything and let the tolerant parser decide.
-                candidates = arr
-            } else if let dict = json as? [String: Any] {
-                // Dict root: prefer the largest embedded array that looks like stations
-                var bestArray: [Any] = []
-                for (_, v) in dict {
-                    if let a = v as? [Any] {
-                        var filtered: [Any] = []
-                        filtered.reserveCapacity(a.count)
-                        for item in a {
-                            if looksLikeStation(item) { filtered.append(item) }
-                        }
-                        if filtered.count > bestArray.count {
-                            bestArray = filtered
-                        }
-                    }
-                }
-
-                if !bestArray.isEmpty {
-                    candidates = bestArray
-                } else {
-                    // Otherwise, dict values might themselves be station objects
-                    let values = Array(dict.values)
-                    var tmp: [Any] = []
-                    tmp.reserveCapacity(values.count)
-                    for item in values {
-                        if looksLikeStation(item) { tmp.append(item) }
-                    }
-                    candidates = tmp
-                }
-
-                if candidates.isEmpty {
-                    // Debug: show top-level keys once if nothing matched
-                    print("GoWind dict root keys:", Array(dict.keys).prefix(20))
-                }
-            }
-
-            lastTotalItems = candidates.count
-
-            // Decode per-item (tolerant) — do NOT fail all stations if a few are malformed
-            var decoded: [GoWindStation] = []
-            decoded.reserveCapacity(candidates.count)
-            var failed = 0
-
-            for item in candidates {
-                // DEBUG: inspect a specific station directly from the live payload
-                if let dict = item as? [String: Any] {
-                    let rawId = (dict["id"] as? String)
-                        ?? (dict["id"] as? NSNumber)?.stringValue
-                        ?? String(describing: dict["id"] ?? "")
-
-                    if rawId == "1821" {
-                        let latRaw = dict["lat"] ?? dict["latitude"] ?? dict["y"] ?? "<none>"
-                        let lonRaw = dict["lon"] ?? dict["lng"] ?? dict["longitude"] ?? dict["x"] ?? "<none>"
-                        print("GoWind RAW 1821 lat:", latRaw, "lon:", lonRaw)
-                        print("GoWind RAW 1821 keys:", Array(dict.keys).sorted())
-                        // Uncomment if you want the full dictionary:
-                        // print("GoWind RAW 1821 dict:", dict)
-                    }
-                }
-                // Fallback: try to interpret as dictionary and build a station (recursive tolerant)
-                if let dict = item as? [String: Any], let st = GoWindStation(dict: dict) {
-                    decoded.append(st)
-                } else {
-                    failed += 1
-
-                    // Debug a few failures to understand the JSON shape
-                    if failed <= 3, let dict = item as? [String: Any] {
-                        let id = (dict["id"] as? String) ?? String(describing: dict["id"] ?? "?")
-                        let nom = (dict["nom"] as? String) ?? (dict["name"] as? String) ?? "?"
-                        let latRaw = dict["lat"] ?? dict["latitude"] ?? dict["y"] ?? "<none>"
-                        let lonRaw = dict["lon"] ?? dict["lng"] ?? dict["longitude"] ?? dict["x"] ?? "<none>"
-                        print("GoWind failed sample id:", id, "nom:", nom)
-                        print("  raw lat:", latRaw)
-                        print("  raw lon:", lonRaw)
-                        print("  keys:", Array(dict.keys).sorted().prefix(40))
-                    }
-                }
-            }
-
-            stations = decoded
-            lastDecodedItems = decoded.count
-
-            print("GoWind status:", status ?? -1, "bytes:", data.count, "total:", candidates.count, "decoded:", decoded.count, "failed:", failed)
-            if let first = decoded.first {
-                print("GoWind first:", first.id, first.coordinate.latitude, first.coordinate.longitude, "w", first.wind, "g", first.gust)
-            }
-
-            let matches1821 = decoded.filter { $0.id == "1821" }
-            if !matches1821.isEmpty {
-                print("GoWind id 1821 matches:", matches1821.count)
-                for m in matches1821.prefix(6) {
-                    print("  1821 -> stableId:", m.stableId, "lat:", m.latValue, "lon:", m.lonValue, "w:", m.wind, "g:", m.gust)
-                }
-            } else {
-                print("GoWind id 1821 not decoded (missing coords or rejected)")
-            }
-
-            // If nothing decoded, show a snippet to debug quickly
-            if decoded.isEmpty {
-                let snippet = String(data: data.prefix(220), encoding: .utf8) ?? "<non-utf8>"
-                lastError = "Decode empty (status: \(status ?? -1), bytes: \(data.count)) snippet: \(snippet)"
-                print("GoWind empty decode. snippet:", snippet)
-            }
-
-        } catch {
-            lastError = String(describing: error)
-            stations = []
-            lastTotalItems = 0
-            lastDecodedItems = 0
-            print("GoWind refresh failed:", error)
-        }
-    }
-}
+// MARK: - Wind Station services are in WindStationService.swift
 
 struct ContentView: View {
 
-    // MARK: - Sensors (sans Holfuy)
-    private let sensors: [SensorConfig] = [
-        .init(id: "6", name: "Glénan", coordinate: .init(latitude: 47.720000, longitude: -3.990000)),
-        .init(id: "29058003", name: "Beg Meil", coordinate: .init(latitude: 47.85442, longitude: -3.97634)),
-        .init(id: "29158001", name: "Penmarch", coordinate: .init(latitude: 47.798040, longitude: -4.373896)),
-        .init(id: "29214001", name: "Plovan", coordinate: .init(latitude: 47.932433, longitude: -4.392694)),
-        .init(id: "7", name: "Pointe de Trévignon", coordinate: .init(latitude: 47.790568, longitude: -3.855443)),
-
-        .init(id: "56069001", name: "Groix", coordinate: .init(latitude: 47.652444, longitude: -3.502139)),
-        .init(id: "56009001", name: "Belle-Île", coordinate: .init(latitude: 47.302983, longitude: -3.238389)),
-        .init(id: "8", name: "Pornichet", coordinate: .init(latitude: 47.257621, longitude: -2.351409)),
-        .init(id: "44184001", name: "Pointe de Chemoulin", coordinate: .init(latitude: 47.233827, longitude: -2.298877)),
-        .init(id: "2", name: "St Gildas", coordinate: .init(latitude: 47.133768, longitude: -2.246263)),
-        .init(id: "10", name: "Port Navalo", coordinate: .init(latitude: 47.547730, longitude: -2.919029)),
-        .init(id: "5", name: "Phare de la Teignouse", coordinate: .init(latitude: 47.453738, longitude: -3.050746)),
-        .init(id: "56186003", name: "Quiberon Aérodrome", coordinate: .init(latitude: 47.481116, longitude: -3.102231))
-    ]
-
     // MARK: - State
-    @StateObject private var vm = WindViewModel()
-    @StateObject private var goWind = GoWindStore()
-    @State private var goWindTick = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var remoteConfig: RemoteConfigService
+    @StateObject private var stationManager = WindStationManager.shared
+    @StateObject private var favoritesManager = FavoritesManager.shared
+    @State private var refreshTick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
-    @AppStorage("refreshIntervalSeconds") private var refreshIntervalSeconds: Double = 20
+    @AppStorage("refreshIntervalSeconds") private var refreshIntervalSeconds: Double = 30
 
-    @State private var selected: SensorConfig? = nil
+    // Source filters
+    @AppStorage("source_windcornouaille") private var sourceWindCornouaille: Bool = true
+    @AppStorage("source_ffvl") private var sourceFFVL: Bool = false
+    @AppStorage("source_pioupiou") private var sourcePioupiou: Bool = true
+    @AppStorage("source_holfuy") private var sourceHolfuy: Bool = true
+    @AppStorage("source_windguru") private var sourceWindguru: Bool = true
+    @AppStorage("source_windsup") private var sourceWindsUp: Bool = false
+    @AppStorage("source_meteofrance") private var sourceMeteoFrance: Bool = true
+    @AppStorage("source_diabox") private var sourceDiabox: Bool = true
+    @AppStorage("source_netatmo") private var sourceNetatmo: Bool = false
+    @AppStorage("source_ndbc") private var sourceNDBC: Bool = true
+    @AppStorage("windsup_email") private var windsUpEmail: String = ""
+    @AppStorage("windsup_password") private var windsUpPassword: String = ""
+
+    // Kite spots
+    @AppStorage("showKiteSpots") private var showKiteSpots: Bool = false
+    @AppStorage("kiteMaxWindThreshold") private var kiteMaxWindThreshold: Int = 40
+    @AppStorage("kiteRiderLevel") private var kiteRiderLevelRaw: String = KiteRiderLevel.intermediate.rawValue
+    @State private var selectedKiteSpot: KiteSpot? = nil
+    @State private var showKitePanel: Bool = false
+    @State private var kiteSpotForecast: ForecastData? = nil
+    @State private var kiteSpotForecastLoading: Bool = false
+
+    /// Find the nearest wind station to the selected kite spot (within 30km)
+    private var nearestStationForKiteSpot: WindStation? {
+        guard let spot = selectedKiteSpot else { return nil }
+        let spotLocation = CLLocation(latitude: spot.latitude, longitude: spot.longitude)
+        let maxDistance: Double = 30_000 // 30km max
+
+        return cachedFilteredStations
+            .filter { $0.isOnline }
+            .min(by: { station1, station2 in
+                let loc1 = CLLocation(latitude: station1.latitude, longitude: station1.longitude)
+                let loc2 = CLLocation(latitude: station2.latitude, longitude: station2.longitude)
+                return spotLocation.distance(from: loc1) < spotLocation.distance(from: loc2)
+            })
+            .flatMap { station in
+                let stationLocation = CLLocation(latitude: station.latitude, longitude: station.longitude)
+                return spotLocation.distance(from: stationLocation) <= maxDistance ? station : nil
+            }
+    }
+
+    /// Find the nearest wave buoy to the selected kite spot (within 150km)
+    /// Prioritizes buoys with seaTemp, but falls back to any active buoy with wave data
+    private var nearestBuoyForKiteSpot: WaveBuoy? {
+        guard let spot = selectedKiteSpot else { return nil }
+        let spotLocation = CLLocation(latitude: spot.latitude, longitude: spot.longitude)
+        let maxDistance: Double = 150_000 // 150km max (buoys are sparse along the coast)
+
+        // First, try to find a buoy with seaTemp
+        let buoyWithTemp = waveBuoyService.buoys
+            .filter { $0.status.isOnline && $0.seaTemp != nil }
+            .min(by: { buoy1, buoy2 in
+                let loc1 = CLLocation(latitude: buoy1.latitude, longitude: buoy1.longitude)
+                let loc2 = CLLocation(latitude: buoy2.latitude, longitude: buoy2.longitude)
+                return spotLocation.distance(from: loc1) < spotLocation.distance(from: loc2)
+            })
+            .flatMap { buoy in
+                let buoyLocation = CLLocation(latitude: buoy.latitude, longitude: buoy.longitude)
+                return spotLocation.distance(from: buoyLocation) <= maxDistance ? buoy : nil
+            }
+
+        if buoyWithTemp != nil {
+            return buoyWithTemp
+        }
+
+        // Fallback: any active buoy with wave data (hm0)
+        return waveBuoyService.buoys
+            .filter { $0.status.isOnline && $0.hm0 != nil }
+            .min(by: { buoy1, buoy2 in
+                let loc1 = CLLocation(latitude: buoy1.latitude, longitude: buoy1.longitude)
+                let loc2 = CLLocation(latitude: buoy2.latitude, longitude: buoy2.longitude)
+                return spotLocation.distance(from: loc1) < spotLocation.distance(from: loc2)
+            })
+            .flatMap { buoy in
+                let buoyLocation = CLLocation(latitude: buoy.latitude, longitude: buoy.longitude)
+                return spotLocation.distance(from: buoyLocation) <= maxDistance ? buoy : nil
+            }
+    }
+
+    // Surf spots
+    @AppStorage("showSurfSpots") private var showSurfSpots: Bool = false
+    @State private var selectedSurfSpot: SurfSpot? = nil
+    @State private var showSurfPanel: Bool = false
+
+    // Paragliding spots
+    @AppStorage("showParaglidingSpots") private var showParaglidingSpots: Bool = false
+    @State private var selectedParaglidingSpot: ParaglidingSpot? = nil
+    @State private var showParaglidingPanel: Bool = false
+    @State private var paraglidingSpotForecast: ForecastData? = nil
+    @State private var paraglidingSpotForecastLoading: Bool = false
+    @State private var paraglidingSpots: [ParaglidingSpot] = []
+    @State private var spotAirWebcams: [SpotAirWebcam] = []
+
+    /// Find the nearest wind station to the selected paragliding spot (within 30km)
+    private var nearestStationForParaglidingSpot: WindStation? {
+        guard let spot = selectedParaglidingSpot else { return nil }
+        let spotLocation = CLLocation(latitude: spot.latitude, longitude: spot.longitude)
+        let maxDistance: Double = 30_000
+
+        return cachedFilteredStations
+            .filter { $0.isOnline }
+            .min(by: { station1, station2 in
+                let loc1 = CLLocation(latitude: station1.latitude, longitude: station1.longitude)
+                let loc2 = CLLocation(latitude: station2.latitude, longitude: station2.longitude)
+                return spotLocation.distance(from: loc1) < spotLocation.distance(from: loc2)
+            })
+            .flatMap { station in
+                let stationLocation = CLLocation(latitude: station.latitude, longitude: station.longitude)
+                return spotLocation.distance(from: stationLocation) <= maxDistance ? station : nil
+            }
+    }
+
+    /// Find the nearest SpotAir webcam to the selected paragliding spot (within 10km)
+    private var nearestWebcamForParaglidingSpot: SpotAirWebcam? {
+        guard let spot = selectedParaglidingSpot else { return nil }
+        let spotLocation = CLLocation(latitude: spot.latitude, longitude: spot.longitude)
+        let maxDistance: Double = 10_000
+
+        return spotAirWebcams
+            .filter { $0.isOnline }
+            .min(by: { cam1, cam2 in
+                let loc1 = CLLocation(latitude: cam1.latitude, longitude: cam1.longitude)
+                let loc2 = CLLocation(latitude: cam2.latitude, longitude: cam2.longitude)
+                return spotLocation.distance(from: loc1) < spotLocation.distance(from: loc2)
+            })
+            .flatMap { cam in
+                let camLocation = CLLocation(latitude: cam.latitude, longitude: cam.longitude)
+                return spotLocation.distance(from: camLocation) <= maxDistance ? cam : nil
+            }
+    }
+
+    /// Find the nearest wave buoy to the selected surf spot (within 150km)
+    private var nearestBuoyForSurfSpot: WaveBuoy? {
+        guard let spot = selectedSurfSpot else { return nil }
+        let spotLocation = CLLocation(latitude: spot.latitude, longitude: spot.longitude)
+        let maxDistance: Double = 150_000 // 150km max
+
+        return waveBuoyService.buoys
+            .filter { $0.status.isOnline && $0.hm0 != nil }
+            .min(by: { buoy1, buoy2 in
+                let loc1 = CLLocation(latitude: buoy1.latitude, longitude: buoy1.longitude)
+                let loc2 = CLLocation(latitude: buoy2.latitude, longitude: buoy2.longitude)
+                return spotLocation.distance(from: loc1) < spotLocation.distance(from: loc2)
+            })
+            .flatMap { buoy in
+                let buoyLocation = CLLocation(latitude: buoy.latitude, longitude: buoy.longitude)
+                return spotLocation.distance(from: buoyLocation) <= maxDistance ? buoy : nil
+            }
+    }
+
+    // First launch detection
+    @AppStorage("hasLaunchedBefore") private var hasLaunchedBefore: Bool = false
+    @StateObject private var locationManager = LocationManager()
+    @State private var hasInitializedLocation: Bool = false
+
+    private var enabledSources: Set<WindSource> {
+        var sources = Set<WindSource>()
+        if sourceWindCornouaille { sources.insert(.windCornouaille) }
+        if sourceFFVL { sources.insert(.ffvl) }
+        if sourcePioupiou { sources.insert(.pioupiou) }
+        if sourceHolfuy { sources.insert(.holfuy) }
+        if sourceWindguru { sources.insert(.windguru) }
+        if sourceWindsUp { sources.insert(.windsUp) }
+        if sourceMeteoFrance { sources.insert(.meteoFrance) }
+        if sourceDiabox { sources.insert(.diabox) }
+        if sourceNetatmo { sources.insert(.netatmo) }
+        if sourceNDBC { sources.insert(.ndbc) }
+        return sources
+    }
+
+    private var filteredStations: [WindStation] {
+        stationManager.stations.filter { station in
+            enabledSources.contains(station.source) &&
+            !station.name.contains("Concorde") &&
+            // Masquer les stations avec 0 nœud constant et 0 nœud en rafale
+            !(station.wind == 0 && station.gust == 0)
+        }
+    }
+
+    private var mapStyle: MapStyleOption {
+        get { MapStyleOption(rawValue: mapStyleRaw) ?? .standard }
+        nonmutating set { mapStyleRaw = newValue.rawValue }
+    }
+
+    @State private var selectedStation: WindStation? = nil
+    @State private var stationSamples: [WCChartSample] = []
+
+    // Cached filtered stations - avoid recomputing on every access
+    @State private var cachedFilteredStations: [WindStation] = []
+    // Dictionary for O(1) lookup by stationId
+    @State private var stationById: [String: WindStation] = [:]
     @State private var timeFrame: Int = 60   // 2h
     @State private var showPanel: Bool = false
-    @State private var showChartFull: Bool = false
-    @State private var showSettings: Bool = false
+    @State private var showWavePanel: Bool = false
+    @State private var showForecastFull: Bool = false
+    @AppStorage("mapStyleRaw") private var mapStyleRaw: String = MapStyleOption.standard.rawValue
+    @State private var showMapStylePicker: Bool = false
+    @State private var showSeaMap: Bool = false
+    @State private var lastSpotConditionCheck: Date?
 
+    // Praticable spots overlay
+    @State private var showPraticableSpots: Bool = false
+    @State private var spotScores: [String: Int] = [:]  // spotId -> score
+    @State private var isLoadingSpotScores: Bool = false
+    @State private var showWindyFullscreen: Bool = false
+    @AppStorage("openWeatherMapAPIKey") private var openWeatherMapAPIKey: String = ""
+    @State private var showAlertConfig: Bool = false
+    @State private var selectedWebcam: Webcam? = nil
+    @State private var selectedWaveBuoy: WaveBuoy? = nil
+    @AppStorage("showWebcamsOnMap") private var showWebcamsOnMap: Bool = false
+    @AppStorage("showWaveBuoysOnMap") private var showWaveBuoysOnMap: Bool = true
+
+    // Search
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFocused: Bool
+    @State private var showUserLocation: Bool = false
+    @State private var needsLocationZoom: Bool = false
+
+    // Tide state
+    @StateObject private var tideService = TideService.shared
+    @State private var currentTideData: TideData? = nil
+    @AppStorage("showTideWidget") private var showTideWidget: Bool = true
+    @State private var showTideDetail: Bool = false
+
+    @State private var tideUpdateTask: Task<Void, Never>?
+    @State private var scoresUpdateTask: Task<Void, Never>?
+    @State private var lastTidePortCode: String = "BREST"
+    @State private var lastKnownSpan: MKCoordinateSpan = MKCoordinateSpan(latitudeDelta: 1.6, longitudeDelta: 2.0)
+    @State private var isCenteringCamera: Bool = false
+    @State private var centeringTaskId: UUID = UUID()
+
+    @StateObject private var notificationManager = NotificationManager.shared
+    @StateObject private var phoneSessionManager = PhoneSessionManager.shared
+    @StateObject private var waveBuoyService = WaveBuoyService.shared
+    @StateObject private var webcamService = WebcamService.shared
+    @StateObject private var networkMonitor = NetworkMonitor.shared
+    // Forecast state
+    @State private var forecast: ForecastData? = nil
+    @State private var forecastLoading: Bool = false
+
+    // Chart loading state
+    @State private var isChartLoading: Bool = false
+    @State private var chartLoadGeneration: Int = 0
+
+    // Initial camera: uses remote config defaults or falls back to France
     @State private var camera: MapCameraPosition = .region(
         MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 47.6, longitude: -3.6),
-            span: MKCoordinateSpan(latitudeDelta: 1.6, longitudeDelta: 2.0)
+            center: CLLocationCoordinate2D(
+                latitude: UserDefaults.standard.object(forKey: "defaultMapLat") as? Double ?? 46.5,
+                longitude: UserDefaults.standard.object(forKey: "defaultMapLon") as? Double ?? 2.5
+            ),
+            span: MKCoordinateSpan(latitudeDelta: 10.0, longitudeDelta: 10.0)
         )
     )
 
@@ -474,1034 +317,2265 @@ struct ContentView: View {
     @State private var touchX: Date? = nil
     @State private var touchSampleWind: Double? = nil
     @State private var touchSampleGust: Double? = nil
+    @State private var touchSampleDir: Double? = nil
 
     // MARK: - Animations
     private let panelAnim = Animation.smooth(duration: 0.38)
     private let cameraAnim = Animation.smooth(duration: 0.55)
 
+    /// Check if any detail panel is visible (to hide tab bar)
+    private var isAnyPanelShowing: Bool {
+        showPanel || showKitePanel || showSurfPanel || showParaglidingPanel || showWavePanel
+    }
+
+    /// iPad uses trailing slide, iPhone uses bottom slide
+    private var panelTransition: AnyTransition {
+        if horizontalSizeClass == .regular {
+            return .move(edge: .trailing).combined(with: .opacity)
+        }
+        return .move(edge: .bottom).combined(with: .opacity)
+    }
+
+    /// iPad panel padding (vertical + trailing), iPhone padding (bottom + horizontal)
+    private func panelPadding() -> some ViewModifier {
+        PanelPaddingModifier(isRegular: horizontalSizeClass == .regular)
+    }
+
     var body: some View {
         homeView
-            .sheet(isPresented: $showSettings) {
-                SettingsView(refreshInterval: $refreshIntervalSeconds)
+            .toolbar(isAnyPanelShowing ? .hidden : .visible, for: .tabBar)
+            .animation(.easeInOut(duration: 0.25), value: isAnyPanelShowing)
+            .sheet(isPresented: $showMapStylePicker) {
+                MapStylePicker(selectedStyle: Binding(
+                    get: { mapStyle },
+                    set: { mapStyleRaw = $0.rawValue }
+                ))
+                .presentationDetents([.height(280)])
+                .presentationDragIndicator(.visible)
+            }
+            .fullScreenCover(isPresented: $showWindyFullscreen) {
+                WindyOverlayView(
+                    isPresented: $showWindyFullscreen,
+                    latitude: camera.region?.center.latitude ?? 47.6,
+                    longitude: camera.region?.center.longitude ?? -3.6,
+                    zoom: lastKnownSpan.windyZoom
+                )
             }
     }
 
     private var homeView: some View {
-        ZStack(alignment: .top) {
+        homeViewBase
+            .modifier(HomeViewModifiers(
+                showForecastFull: $showForecastFull,
+                showAlertConfig: $showAlertConfig,
+                selectedKiteSpot: $selectedKiteSpot,
+                selectedStation: selectedStation,
+                haptic: haptic
+            ))
+            .fullScreenCover(item: $selectedWebcam) { webcam in
+                WebcamFullScreenView(webcam: webcam)
+            }
+    }
+
+    // Computed hash for all source settings - changes when any source toggle changes
+    private var sourceSettingsHash: Int {
+        var hasher = Hasher()
+        hasher.combine(sourceWindCornouaille)
+        hasher.combine(sourceFFVL)
+        hasher.combine(sourcePioupiou)
+        hasher.combine(sourceHolfuy)
+        hasher.combine(sourceWindguru)
+        hasher.combine(sourceWindsUp)
+        hasher.combine(sourceMeteoFrance)
+        hasher.combine(sourceDiabox)
+        return hasher.finalize()
+    }
+
+    private var homeViewBase: some View {
+        homeViewLayers
+            .sheet(isPresented: $showTideDetail) {
+                TideDetailView(initialTideData: currentTideData, tideService: tideService)
+            }
+
+            .onAppear { handleOnAppear() }
+            .onDisappear { }
+            .onReceive(refreshTick) { _ in handleRefreshTick() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                handleReturnToForeground()
+            }
+            .onChange(of: sourceSettingsHash) { _, _ in refreshSources() }
+            .onChange(of: favoritesManager.favorites) { _, _ in updateWidgetData() }
+            .onChange(of: favoritesManager.favoriteWaveBuoys) { _, _ in updateWidgetData() }
+            .onChange(of: timeFrame) { _, _ in handleTimeFrameChange() }
+            .onChange(of: refreshIntervalSeconds) { _, _ in handleRefreshIntervalChange() }
+            .onChange(of: camera) { _, newCamera in handleCameraChange(newCamera) }
+            .onChange(of: locationManager.userLocation) { _, newLocation in
+                handleLocationUpdate(newLocation)
+                if needsLocationZoom, let loc = newLocation {
+                    needsLocationZoom = false
+                    zoomToLocation(loc)
+                }
+            }
+            .onChange(of: isSearchFocused) { _, _ in }
+            .onChange(of: stationManager.stations) { _, newStations in
+                // Update selected station with fresh data after refresh
+                if let selected = selectedStation,
+                   let updated = newStations.first(where: { $0.stableId == selected.stableId }) {
+                    selectedStation = updated
+                }
+            }
+            .onChange(of: appState.selectedStationId) { _, stationId in handleAppStateStationChange(stationId) }
+            .onChange(of: appState.selectedKiteSpotId) { _, spotId in handleAppStateKiteSpotChange(spotId) }
+            .onChange(of: appState.selectedSurfSpotId) { _, spotId in handleAppStateSurfSpotChange(spotId) }
+            .onChange(of: appState.selectedWaveBuoyId) { _, buoyId in handleAppStateWaveBuoyChange(buoyId) }
+    }
+
+    @ViewBuilder
+    private var homeViewLayers: some View {
+        ZStack {
+            // Layer 0: Map (full screen, bottommost)
             mapWithSettings
-            panelLayer
+
+            // Layer 1: Top controls (search + filter pills + results)
+            VStack(spacing: 4) {
+                searchPillContent
+                    .padding(.horizontal, 16)
+
+                ZStack {
+                    filterPillsContent
+                        .opacity(isSearchFocused && searchText.count >= 2 ? 0 : 1)
+                        .allowsHitTesting(!(isSearchFocused && searchText.count >= 2))
+
+                    if isSearchFocused && searchText.count >= 2 {
+                        searchResultsOverlay
+                    }
+                }
+            }
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            // Layer 2: Bottom-left buttons
+            bottomLeadingContent
+                .padding(.leading, 12)
+                .padding(.bottom, 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+
+            // Layer 3: Bottom-right buttons
+            bottomTrailingContent
+                .padding(.trailing, 12)
+                .padding(.bottom, 60)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+
+            // Layer 4: Error banner
+            ErrorBannerView()
+                .padding(.top, 90)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .allowsHitTesting(ErrorManager.shared.isShowingError)
+
+            // Layer 6: Detail panels (topmost)
+            if isAnyPanelShowing {
+                if horizontalSizeClass == .regular {
+                    panelContent
+                        .frame(width: 560)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                } else {
+                    panelContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                }
+            }
         }
-        .animation(panelAnim, value: showPanel)
-        .onAppear {
-            vm.startAutoRefresh(
-                sensorIds: sensors.map(\.id),
-                selectedSensorId: { selected?.id },
-                timeFrame: { timeFrame },
-                refreshIntervalSeconds: { refreshIntervalSeconds }
+    }
+
+    private func handleOnAppear() {
+        // 0. Request notification authorization if user has alerts configured
+        if !favoritesManager.favorites.filter({ $0.windAlertThreshold != nil }).isEmpty ||
+           !favoritesManager.spotsWithActiveAlerts.isEmpty {
+            Task { _ = await notificationManager.requestAuthorization() }
+        }
+
+        // 1. Show cached data immediately (non-blocking)
+        updateCachedStations()
+
+        // 2. Handle pending cross-tab navigation (from Favorites tab)
+        if let stationId = appState.selectedStationId {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000) // 200ms - let Map settle
+                handleAppStateStationChange(stationId)
+            }
+        } else if let spotId = appState.selectedKiteSpotId {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                handleAppStateKiteSpotChange(spotId)
+            }
+        } else if let spotId = appState.selectedSurfSpotId {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                handleAppStateSurfSpotChange(spotId)
+            }
+        } else if let buoyId = appState.selectedWaveBuoyId {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                handleAppStateWaveBuoyChange(buoyId)
+            }
+        }
+
+        // 3. Handle location — only center on first launch (not when returning from another tab)
+        showUserLocation = true
+        locationManager.requestLocation()
+        if let loc = locationManager.userLocation, !hasInitializedLocation {
+            let taskId = UUID()
+            centeringTaskId = taskId
+            isCenteringCamera = true
+            camera = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: loc.latitude, longitude: loc.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 1.0, longitudeDelta: 1.0)
+            ))
+            hasInitializedLocation = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                if centeringTaskId == taskId {
+                    isCenteringCamera = false
+                }
+            }
+        }
+        if !hasLaunchedBefore {
+            hasLaunchedBefore = true
+        }
+
+        // 3. Launch independent data fetches in parallel
+        // Tide data has no dependency on wind stations — fetch immediately
+        Task(priority: .medium) {
+            _ = await tideService.fetchPorts()
+            let tideResult = await tideService.fetchTideData(portCode: "BREST", duration: 11)
+            if let data = tideResult {
+                await MainActor.run {
+                    currentTideData = data
+                    favoritesManager.updateTideWidgetData(
+                        tides: data.tides,
+                        locationName: data.port.name
+                    )
+                }
+            } else {
+                await MainActor.run {
+                    ErrorManager.shared.show(.tideFailed)
+                }
+            }
+        }
+
+        // Launch all data fetches in parallel for fastest startup
+        let loc = locationManager.userLocation?.clCoordinate
+
+        // Wind stations (highest priority)
+        Task(priority: .userInitiated) {
+            await stationManager.refresh(sources: enabledSources, userLocation: loc)
+            await MainActor.run {
+                updateCachedStations()
+                updateWidgetData()
+                reportStationErrors()
+                checkWindAlerts()
+            }
+            // Holfuy direct update after main stations
+            await stationManager.refreshHolfuyDirect(userLocation: loc)
+        }
+
+        // Wave buoys (parallel, no dependency on stations)
+        Task(priority: .userInitiated) {
+            await waveBuoyService.fetchBuoys()
+            await MainActor.run {
+                favoritesManager.updateWaveBuoyWidgetData(buoys: waveBuoyService.buoys)
+                if waveBuoyService.lastError != nil {
+                    ErrorManager.shared.show(.waveBuoysFailed)
+                }
+            }
+        }
+
+        // Paragliding spots (parallel, if enabled)
+        if showParaglidingSpots, let region = camera.region {
+            Task(priority: .medium) {
+                let south = region.center.latitude - region.span.latitudeDelta / 2
+                let north = region.center.latitude + region.span.latitudeDelta / 2
+                let west = region.center.longitude - region.span.longitudeDelta / 2
+                let east = region.center.longitude + region.span.longitudeDelta / 2
+                do {
+                    async let spotsResult = SpotAirService.shared.fetchSpots(
+                        south: south, north: north, west: west, east: east
+                    )
+                    async let webcamsResult = SpotAirService.shared.fetchWebcams(
+                        south: south, north: north, west: west, east: east
+                    )
+                    let (spots, webcams) = try await (spotsResult, webcamsResult)
+                    await MainActor.run {
+                        paraglidingSpots = spots
+                        spotAirWebcams = webcams
+                    }
+                } catch {
+                    Log.error("Initial SpotAir load: \(error)")
+                }
+            }
+        }
+
+    }
+
+    private func handleReturnToForeground() {
+        // Refresh data and check alerts immediately when returning from background
+        Task {
+            let loc = locationManager.userLocation?.clCoordinate
+            await stationManager.refresh(sources: enabledSources, userLocation: loc)
+            updateCachedStations()
+            updateWidgetData()
+            reportStationErrors()
+            checkWindAlerts()
+            await stationManager.refreshHolfuyDirect(userLocation: loc)
+
+        }
+    }
+
+    private func handleRefreshTick() {
+        // Skip if already refreshing (prevents overlapping refreshes)
+        guard !stationManager.isLoading else {
+            Log.network("⏭ Refresh tick skipped — already loading")
+            return
+        }
+        Task {
+            let loc = locationManager.userLocation?.clCoordinate
+            await stationManager.refresh(sources: enabledSources, userLocation: loc)
+            updateCachedStations()
+            updateWidgetData()
+            reportStationErrors()
+            checkWindAlerts()
+            await stationManager.refreshHolfuyDirect(userLocation: loc)
+        }
+    }
+
+    private func handleRefreshIntervalChange() {
+        // Cancel old timer by replacing with new one at the correct interval
+        refreshTick.upstream.connect().cancel()
+        refreshTick = Timer.publish(every: refreshIntervalSeconds, on: .main, in: .common).autoconnect()
+    }
+
+    private func handleTimeFrameChange() {
+        guard let station = selectedStation else { return }
+        switch station.source {
+        case .windsUp: loadWindsUpChart(stationId: station.id)
+        case .meteoFrance: loadMeteoFranceChart(stationId: station.id)
+        case .holfuy: loadHolfuyChart(stationId: station.stableId)
+        case .windguru: loadWindguruChart(stationId: station.stableId)
+        case .pioupiou: loadPioupiouChart(stationId: station.stableId)
+        case .diabox: loadDiaboxChart(stationId: station.stableId)
+        case .windCornouaille: loadWindCornouailleChart(stationId: station.id)
+        case .netatmo: loadNetatmoChart(stationId: station.stableId)
+        case .ndbc: loadNDBCChart(stationId: station.id)
+        default: break
+        }
+    }
+
+    private func handleCameraChange(_ newCamera: MapCameraPosition) {
+        guard !isCenteringCamera else { return }
+        if let region = newCamera.region,
+           region.span.latitudeDelta > 0.01,
+           region.span.longitudeDelta > 0.01 {
+            lastKnownSpan = region.span
+
+            // Update tide port based on map center (debounced)
+            updateTidePortForLocation(region.center)
+
+            // Load paragliding spots for visible region (debounced)
+            if showParaglidingSpots {
+                loadParaglidingSpotsDebounced(region: region)
+            }
+
+            // Reload praticable spots scores if enabled (debounced)
+            if showPraticableSpots {
+                reloadPraticableSpotsDebounced()
+            }
+        }
+    }
+
+    @State private var paraglidingLoadTask: Task<Void, Never>?
+
+    private func loadParaglidingSpotsDebounced(region: MKCoordinateRegion) {
+        paraglidingLoadTask?.cancel()
+        paraglidingLoadTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
+            guard !Task.isCancelled else { return }
+
+            let south = region.center.latitude - region.span.latitudeDelta / 2
+            let north = region.center.latitude + region.span.latitudeDelta / 2
+            let west = region.center.longitude - region.span.longitudeDelta / 2
+            let east = region.center.longitude + region.span.longitudeDelta / 2
+
+            do {
+                async let spotsResult = SpotAirService.shared.fetchSpots(
+                    south: south, north: north, west: west, east: east
+                )
+                async let webcamsResult = SpotAirService.shared.fetchWebcams(
+                    south: south, north: north, west: west, east: east
+                )
+
+                let (spots, webcams) = try await (spotsResult, webcamsResult)
+
+                await MainActor.run {
+                    paraglidingSpots = spots
+                    spotAirWebcams = webcams
+                }
+            } catch {
+                Log.error("SpotAir load error: \(error)")
+            }
+        }
+    }
+
+    private func reloadPraticableSpotsDebounced() {
+        scoresUpdateTask?.cancel()
+        scoresUpdateTask = Task {
+            try? await Task.sleep(nanoseconds: 800_000_000) // 800ms debounce
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                loadPraticableSpots()
+            }
+        }
+    }
+
+    private func updateTidePortForLocation(_ center: CLLocationCoordinate2D) {
+        // Cancel previous task (debounce)
+        tideUpdateTask?.cancel()
+
+        tideUpdateTask = Task {
+            // Wait a bit before updating (debounce 500ms)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+
+            // Find nearest port
+            if let nearestPort = tideService.findNearestPort(to: center) {
+                // Only update if different port
+                if nearestPort.cst != lastTidePortCode {
+                    lastTidePortCode = nearestPort.cst
+                    if let data = await tideService.fetchTideData(for: nearestPort, duration: 11) {
+                        await MainActor.run {
+                            currentTideData = data
+                            // Update widget with tide data
+                            favoritesManager.updateTideWidgetData(
+                                tides: data.tides,
+                                locationName: data.port.name
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // mapWithControls removed - controls now in ZStack within homeViewBase
+
+    private var mapWithSettings: some View {
+        MapLayerView(
+            camera: $camera,
+            selectedStationId: selectedStation?.stableId,
+            windStations: cachedFilteredStations,
+            kiteSpots: kiteSpots,  // Always pass for combined clustering
+            surfSpots: allSurfSpots,  // Always pass for combined clustering
+            showKiteSpots: showKiteSpots,
+            showSurfSpots: showSurfSpots,
+            paraglidingSpots: paraglidingSpots,
+            showParaglidingSpots: showParaglidingSpots,
+            webcams: (remoteConfig.enableWebcams && showWebcamsOnMap) ? webcamService.webcams : [],
+            waveBuoys: (remoteConfig.enableWaveBuoys && showWaveBuoysOnMap) ? waveBuoyService.buoys : [],
+            mapStyle: mapStyle,
+            showSeaMap: showSeaMap,
+            isCenteringCamera: isCenteringCamera,
+            showUserLocation: showUserLocation,
+            onTapStationById: { stationId in
+                selectStationFast(stationId: stationId)
+            },
+            onTapKiteSpot: { spot in
+                haptic(.medium)
+                selectedKiteSpot = spot
+                showKitePanel = true
+                showPanel = false
+                showWavePanel = false
+                showSurfPanel = false
+                showParaglidingPanel = false
+
+                // Center camera on kite spot
+                centerOnAnnotation(coordinate: spot.coordinate)
+
+                // Load forecast for kite spot
+                kiteSpotForecastLoading = true
+                kiteSpotForecast = nil
+                Task {
+                    do {
+                        let data = try await ForecastService.shared.fetchForecast(
+                            latitude: spot.latitude,
+                            longitude: spot.longitude,
+                            model: .arome
+                        )
+                        await MainActor.run {
+                            kiteSpotForecast = data
+                            kiteSpotForecastLoading = false
+                        }
+                    } catch {
+                        await MainActor.run {
+                            kiteSpotForecastLoading = false
+                        }
+                    }
+                }
+            },
+            onTapSurfSpot: { spot in
+                haptic(.medium)
+                selectedSurfSpot = spot
+                showSurfPanel = true
+                showPanel = false
+                showWavePanel = false
+                showKitePanel = false
+                showParaglidingPanel = false
+
+                // Center camera on surf spot
+                centerOnAnnotation(coordinate: spot.coordinate)
+            },
+            onTapParaglidingSpot: { spot in
+                haptic(.medium)
+                selectedParaglidingSpot = spot
+                showParaglidingPanel = true
+                showPanel = false
+                showWavePanel = false
+                showKitePanel = false
+                showSurfPanel = false
+
+                // Center camera on paragliding spot
+                centerOnAnnotation(coordinate: spot.coordinate)
+
+                // Load forecast for paragliding spot
+                paraglidingSpotForecastLoading = true
+                paraglidingSpotForecast = nil
+                Task {
+                    do {
+                        let data = try await ForecastService.shared.fetchForecast(
+                            latitude: spot.latitude,
+                            longitude: spot.longitude,
+                            model: .arome
+                        )
+                        await MainActor.run {
+                            paraglidingSpotForecast = data
+                            paraglidingSpotForecastLoading = false
+                        }
+                    } catch {
+                        await MainActor.run {
+                            paraglidingSpotForecastLoading = false
+                        }
+                    }
+                }
+            },
+            onTapWebcam: { webcam in
+                haptic(.light)
+                selectedWebcam = webcam
+                Analytics.webcamViewed(id: webcam.id)
+            },
+            onTapWaveBuoy: { buoy in
+                haptic(.medium)
+                // Close any open wind panel
+                showPanel = false
+                selectedStation = nil
+                // Open wave panel
+                selectedWaveBuoy = buoy
+                withAnimation(panelAnim) {
+                    showWavePanel = true
+                }
+                // Center camera on buoy
+                centerOnAnnotation(coordinate: buoy.coordinate)
+            },
+            showPraticableSpots: showPraticableSpots,
+            spotScores: spotScores
+        )
+    }
+
+    private func updateCachedStations() {
+        let filtered = filteredStations
+        cachedFilteredStations = filtered
+        // Build dictionary for O(1) lookup by stationId
+        stationById = Dictionary(uniqueKeysWithValues: filtered.map { ($0.stableId, $0) })
+    }
+
+    private func updateWidgetData() {
+        favoritesManager.updateWidgetData(
+            stations: stationManager.stations
+        )
+
+        // Update wave buoy widget data
+        favoritesManager.updateWaveBuoyWidgetData(buoys: waveBuoyService.buoys)
+
+        // Also update Watch
+        phoneSessionManager.sendFavoritesToWatch(
+            favoritesManager.favorites,
+            stations: stationManager.stations
+        )
+    }
+
+    private func reportStationErrors() {
+        // Cache icon + offline banner handle all feedback now
+    }
+
+    private func refreshSources() {
+        // Update cached stations immediately (for filtering)
+        updateCachedStations()
+
+        // Trigger a full refresh with new enabled sources
+        Task {
+            let loc = locationManager.userLocation?.clCoordinate
+            await stationManager.refresh(sources: enabledSources, userLocation: loc)
+            updateCachedStations()
+            updateWidgetData()
+            reportStationErrors()
+            checkWindAlerts()
+            await stationManager.refreshHolfuyDirect(userLocation: loc)
+
+        }
+    }
+
+    private func handleLocationUpdate(_ newLocation: LocationCoordinate?) {
+        // Center on user location only once per session
+        guard let location = newLocation, !hasInitializedLocation else { return }
+        hasInitializedLocation = true
+
+        // Center on user with a local span (~100km view)
+        let taskId = UUID()
+        centeringTaskId = taskId
+        isCenteringCamera = true
+
+        let userRegion = MKCoordinateRegion(
+            center: location.clCoordinate,
+            span: MKCoordinateSpan(latitudeDelta: 1.0, longitudeDelta: 1.0)
+        )
+        camera = .region(userRegion)
+        Log.debug("Centered on user location: \(location.latitude), \(location.longitude)")
+
+        // Reset centering flag after animation
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            if centeringTaskId == taskId {
+                isCenteringCamera = false
+            }
+        }
+    }
+
+    // MARK: - AppState Navigation Handlers (from Favorites tab)
+
+    private let favoritesZoomSpan = MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
+
+    private func handleAppStateStationChange(_ stationId: String?) {
+        guard let stationId = stationId else { return }
+        defer { appState.clearNavigationState() }
+
+        // Check in cached filtered stations (O(1) lookup)
+        if let station = stationById[stationId] {
+            selectStationFast(stationId: stationId)
+            centerOnAnnotation(coordinate: station.coordinate, zoomSpan: favoritesZoomSpan)
+            return
+        }
+
+        // Try ALL stations including disabled sources / offline
+        if let station = stationManager.stations.first(where: { $0.stableId == stationId }) {
+            selectStationFast(stationId: station.stableId)
+            centerOnAnnotation(coordinate: station.coordinate, zoomSpan: favoritesZoomSpan)
+            return
+        }
+
+        // Fallback: use saved coordinates from favorites
+        if let favorite = favoritesManager.favorites.first(where: { $0.id == stationId }) {
+            haptic(.medium)
+            centerOnAnnotation(
+                coordinate: CLLocationCoordinate2D(latitude: favorite.latitude, longitude: favorite.longitude),
+                zoomSpan: favoritesZoomSpan
             )
-            Task { await goWind.refresh() }
         }
-        .onDisappear { vm.stopAutoRefresh() }
-        .onReceive(goWindTick) { _ in
-            Task { await goWind.refresh() }
+    }
+
+    private func handleAppStateKiteSpotChange(_ spotId: String?) {
+        guard let spotId = spotId else { return }
+        defer { appState.clearNavigationState() }
+
+        if let spot = kiteSpots.first(where: { $0.id == spotId }) {
+            haptic(.medium)
+            selectedKiteSpot = spot
+            showKitePanel = true
+            showPanel = false
+            showWavePanel = false
+            showSurfPanel = false
+            centerOnAnnotation(coordinate: spot.coordinate, zoomSpan: favoritesZoomSpan)
+            return
         }
-        // iOS 17+ signature
-        .onChange(of: timeFrame) { _, _ in
-            guard let selected = selected else { return }
-            Task { await vm.loadSelected(sensorId: selected.id, timeFrame: timeFrame) }
+
+        // Fallback: use saved coordinates from favorites
+        if let favorite = favoritesManager.favoriteSpots.first(where: { $0.id == spotId }) {
+            haptic(.medium)
+            centerOnAnnotation(coordinate: favorite.coordinate, zoomSpan: favoritesZoomSpan)
         }
-        .onChange(of: refreshIntervalSeconds) { _, _ in
-            vm.startAutoRefresh(
-                sensorIds: sensors.map(\.id),
-                selectedSensorId: { selected?.id },
-                timeFrame: { timeFrame },
-                refreshIntervalSeconds: { refreshIntervalSeconds }
+    }
+
+    private func handleAppStateSurfSpotChange(_ spotId: String?) {
+        guard let spotId = spotId else { return }
+        defer { appState.clearNavigationState() }
+
+        if let spot = allSurfSpots.first(where: { $0.id == spotId }) {
+            haptic(.medium)
+            selectedSurfSpot = spot
+            showSurfPanel = true
+            showPanel = false
+            showWavePanel = false
+            showKitePanel = false
+            centerOnAnnotation(coordinate: spot.coordinate, zoomSpan: favoritesZoomSpan)
+            return
+        }
+
+        // Fallback: use saved coordinates from favorites
+        if let favorite = favoritesManager.favoriteSpots.first(where: { $0.id == spotId }) {
+            haptic(.medium)
+            centerOnAnnotation(coordinate: favorite.coordinate, zoomSpan: favoritesZoomSpan)
+        }
+    }
+
+    private func handleAppStateWaveBuoyChange(_ buoyId: String?) {
+        guard let buoyId = buoyId else { return }
+        defer { appState.clearNavigationState() }
+
+        if let buoy = waveBuoyService.buoys.first(where: { $0.id == buoyId }) {
+            haptic(.medium)
+            selectedWaveBuoy = buoy
+            showWavePanel = true
+            showPanel = false
+            showKitePanel = false
+            showSurfPanel = false
+            centerOnAnnotation(coordinate: CLLocationCoordinate2D(latitude: buoy.latitude, longitude: buoy.longitude), zoomSpan: favoritesZoomSpan)
+            return
+        }
+
+        // Fallback: buoys might not be loaded yet, use saved coordinates
+        if let favorite = favoritesManager.favoriteWaveBuoys.first(where: { $0.id == buoyId }) {
+            haptic(.medium)
+            centerOnAnnotation(
+                coordinate: CLLocationCoordinate2D(latitude: favorite.latitude, longitude: favorite.longitude),
+                zoomSpan: favoritesZoomSpan
             )
         }
-        .sheet(isPresented: $showChartFull) {
-            if let selected = selected {
-                ChartFullScreen(
-                    title: selected.name,
-                    latest: vm.latestBySensorId[selected.id],
-                    samples: vm.samples,
+    }
+
+    private func checkWindAlerts() {
+        // WC stations are already in stationManager.stations
+        notificationManager.checkAndNotify(
+            stations: stationManager.stations,
+            favorites: favoritesManager.favorites
+        )
+
+        // Check spot conditions (throttled to every 15 minutes)
+        Task {
+            await checkSpotConditionsForeground()
+        }
+    }
+
+    /// Check spot conditions in foreground (throttled)
+    private func checkSpotConditionsForeground() async {
+        // Throttle: only check every 15 minutes
+        if let lastCheck = lastSpotConditionCheck,
+           Date().timeIntervalSince(lastCheck) < 15 * 60 {
+            return
+        }
+
+        let spotsWithAlerts = favoritesManager.spotsWithActiveAlerts
+        guard !spotsWithAlerts.isEmpty else { return }
+
+        // Fetch forecasts for each spot
+        var forecasts: [String: ForecastData] = [:]
+        var surfForecasts: [String: SurfWaveForecast] = [:]
+
+        for spot in spotsWithAlerts {
+            do {
+                let forecast = try await ForecastService.shared.fetchForecast(
+                    latitude: spot.latitude,
+                    longitude: spot.longitude
+                )
+                forecasts[spot.id] = forecast
+            } catch {
+                Log.network("Foreground spot check: Failed to fetch forecast for \(spot.name)")
+            }
+
+            if spot.type == .surf {
+                do {
+                    let surfForecast = try await SurfForecastService.shared.fetchForecastDirect(
+                        latitude: spot.latitude,
+                        longitude: spot.longitude
+                    )
+                    if let current = surfForecast.first {
+                        surfForecasts[spot.id] = current
+                    }
+                } catch {
+                    Log.network("Foreground spot check: Failed to fetch surf forecast for \(spot.name)")
+                }
+            }
+        }
+
+        // Fetch tide data
+        var tideData: TideData?
+        if let firstSpot = spotsWithAlerts.first {
+            let coordinate = CLLocationCoordinate2D(latitude: firstSpot.latitude, longitude: firstSpot.longitude)
+            tideData = await TideService.shared.fetchTideForLocation(coordinate)
+        }
+
+        // Check conditions and send notifications
+        await MainActor.run {
+            notificationManager.checkSpotConditions(
+                spots: spotsWithAlerts,
+                forecasts: forecasts,
+                surfForecasts: surfForecasts,
+                tideData: tideData,
+                nearbyStations: stationManager.stations
+            )
+            lastSpotConditionCheck = Date()
+        }
+
+        Log.debug("Foreground: Checked spot conditions for \(spotsWithAlerts.count) spots")
+    }
+
+    // MARK: - Ultra-fast selection (optimized for responsiveness)
+
+    private func selectStationFast(stationId: String) {
+        // O(1) lookup using dictionary
+        guard let station = stationById[stationId] else { return }
+
+        Analytics.stationSelected(name: station.name, source: station.source.displayName)
+
+        // 1. Haptic FIRST - user feels immediate response
+        haptic(.medium)
+
+        // 2. Update state
+        stationSamples = []
+        forecast = nil
+        selectedStation = station
+        selectedWaveBuoy = nil
+        showWavePanel = false
+        showPanel = true
+
+        // 3. Center camera on station
+        centerOnAnnotation(coordinate: station.coordinate)
+
+        // 4. Load forecast async
+        loadForecast(stationId: station.stableId, stationName: station.name, latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+
+        // 5. Load chart data for stations with history
+        if station.source == .windsUp {
+            if timeFrame == 288 { timeFrame = 144 }
+            loadWindsUpChart(stationId: station.id)
+        } else if station.source == .meteoFrance {
+            loadMeteoFranceChart(stationId: station.id)
+        } else if station.source == .holfuy {
+            loadHolfuyChart(stationId: station.stableId)
+        } else if station.source == .windguru {
+            loadWindguruChart(stationId: station.stableId)
+        } else if station.source == .pioupiou {
+            loadPioupiouChart(stationId: station.stableId)
+        } else if station.source == .diabox {
+            if timeFrame == 288 { timeFrame = 144 }
+            loadDiaboxChart(stationId: station.stableId)
+        } else if station.source == .windCornouaille {
+            loadWindCornouailleChart(stationId: station.id)
+        } else if station.source == .netatmo {
+            loadNetatmoChart(stationId: station.stableId)
+        } else if station.source == .ndbc {
+            loadNDBCChart(stationId: station.id)
+        }
+    }
+
+    private func centerAbovePanel(coordinate: CLLocationCoordinate2D, span: MKCoordinateSpan? = nil, animated: Bool = true) {
+        // Use provided span or fall back to lastKnownSpan
+        let useSpan = span ?? lastKnownSpan
+
+        // Validate span to prevent glitches
+        guard useSpan.latitudeDelta > 0.005 && useSpan.longitudeDelta > 0.005 else { return }
+
+        // Offset to position station above panel (30% offset)
+        let yOffset = useSpan.latitudeDelta * 0.30
+
+        let centered = CLLocationCoordinate2D(
+            latitude: coordinate.latitude - yOffset,
+            longitude: coordinate.longitude
+        )
+
+        let newRegion = MKCoordinateRegion(center: centered, span: useSpan)
+
+        // Set camera - animation handled by caller or simple flag
+        if animated {
+            withAnimation(.easeOut(duration: 0.3)) {
+                camera = .region(newRegion)
+            }
+        } else {
+            camera = .region(newRegion)
+        }
+    }
+
+    /// Simplified centering that's more reliable during refreshes
+    private func centerOnAnnotation(coordinate: CLLocationCoordinate2D, zoomSpan: MKCoordinateSpan? = nil) {
+        let taskId = UUID()
+        centeringTaskId = taskId
+        isCenteringCamera = true
+
+        // Use provided zoom span or current span
+        let span = zoomSpan ?? lastKnownSpan
+
+        // Small delay to let state settle, then center
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            guard centeringTaskId == taskId else { return }
+            centerAbovePanel(coordinate: coordinate, span: span)
+
+            // Reset flag after animation completes
+            try? await Task.sleep(nanoseconds: 400_000_000) // 400ms
+            if centeringTaskId == taskId {
+                isCenteringCamera = false
+            }
+        }
+    }
+
+    /// Zoom to user location with proper isCenteringCamera flag
+    private func zoomToLocation(_ loc: LocationCoordinate) {
+        let taskId = UUID()
+        centeringTaskId = taskId
+        isCenteringCamera = true
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            guard centeringTaskId == taskId else { return }
+            camera = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: loc.latitude, longitude: loc.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+            ))
+
+            // Reset flag after animation completes
+            try? await Task.sleep(nanoseconds: 600_000_000) // 600ms
+            if centeringTaskId == taskId {
+                isCenteringCamera = false
+            }
+        }
+    }
+
+    /// Load forecast for a kite spot
+    private func loadKiteSpotForecast(spot: KiteSpot) {
+        kiteSpotForecastLoading = true
+        kiteSpotForecast = nil
+        Task {
+            do {
+                let data = try await ForecastService.shared.fetchForecast(
+                    latitude: spot.latitude,
+                    longitude: spot.longitude,
+                    model: .arome
+                )
+                await MainActor.run {
+                    kiteSpotForecast = data
+                    kiteSpotForecastLoading = false
+                }
+            } catch {
+                Log.error("Kite spot forecast error: \(error)")
+                await MainActor.run {
+                    kiteSpotForecastLoading = false
+                    ErrorManager.shared.show(.forecastFailed(spot.name))
+                }
+            }
+        }
+    }
+
+    private func loadWindsUpChart(stationId: String) {
+        let allObservations = WindsUpService.shared.getObservations(windStationId: stationId)
+
+        // Map timeFrame picker tags to actual hours (same as other sources)
+        let hours: Int
+        switch timeFrame {
+        case 60: hours = 2
+        case 36: hours = 6
+        case 144: hours = 24
+        case 288: hours = 48
+        default: hours = 2
+        }
+
+        let cutoffDate = Date().addingTimeInterval(-Double(hours) * 3600)
+        let observations = allObservations.filter { $0.timestamp >= cutoffDate }
+
+        Log.data("WindsUp Chart: Loading \(observations.count)/\(allObservations.count) observations for \(stationId) (last \(hours)h)")
+
+        // Convert WindsUp observations to WCChartSample format
+        var samples: [WCChartSample] = []
+        var gustCount = 0
+        for obs in observations {
+            // Wind speed
+            samples.append(WCChartSample(
+                id: "\(obs.timestamp.timeIntervalSince1970)_wind",
+                t: obs.timestamp,
+                value: obs.windSpeed,
+                kind: .wind
+            ))
+            // Gust speed (if available)
+            if let gust = obs.gustSpeed {
+                samples.append(WCChartSample(
+                    id: "\(obs.timestamp.timeIntervalSince1970)_gust",
+                    t: obs.timestamp,
+                    value: gust,
+                    kind: .gust
+                ))
+                gustCount += 1
+            }
+            // Direction (if available)
+            if let dir = obs.windDirectionDegrees {
+                samples.append(WCChartSample(
+                    id: "\(obs.timestamp.timeIntervalSince1970)_dir",
+                    t: obs.timestamp,
+                    value: dir,
+                    kind: .dir
+                ))
+            }
+        }
+
+        // Sort by time ascending
+        samples.sort { $0.t < $1.t }
+        stationSamples = samples
+        Log.data("WindsUp Chart: Created \(samples.count) samples (\(gustCount) gusts)")
+    }
+
+    private func loadMeteoFranceChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+            do {
+                // Map timeFrame picker values to actual hours
+                let hours: Int
+                switch timeFrame {
+                case 60: hours = 2
+                case 36: hours = 6
+                case 144: hours = 24
+                case 288: hours = 48
+                default: hours = 2
+                }
+
+                // Use Vercel API (cached, supports unlimited users)
+                let history = try await MeteoFranceService.shared.fetchHistoryFromVercel(stationId: stationId, hours: hours)
+
+                guard chartLoadGeneration == generation else { return }
+
+                // Filter by actual duration
+                let cutoffDate = Date().addingTimeInterval(-Double(hours) * 3600)
+                let filtered = history.filter { $0.timestamp >= cutoffDate }
+
+                Log.data("MF Chart: Loading \(filtered.count)/\(history.count) observations for \(stationId) (last \(hours)h)")
+
+                // Convert to WCChartSample format
+                var samples: [WCChartSample] = []
+                for obs in filtered {
+                    // Wind speed
+                    samples.append(WCChartSample(
+                        id: "\(obs.timestamp.timeIntervalSince1970)_wind",
+                        t: obs.timestamp,
+                        value: obs.windSpeed,
+                        kind: .wind
+                    ))
+                    // Gust speed
+                    if obs.windGust > 0 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_gust",
+                            t: obs.timestamp,
+                            value: obs.windGust,
+                            kind: .gust
+                        ))
+                    }
+                    // Direction
+                    if obs.windDirection >= 0 && obs.windDirection <= 360 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_dir",
+                            t: obs.timestamp,
+                            value: obs.windDirection,
+                            kind: .dir
+                        ))
+                    }
+                }
+
+                // Sort by time ascending
+                samples.sort { $0.t < $1.t }
+                stationSamples = samples
+                Log.data("MF Chart: Created \(samples.count) samples")
+            } catch {
+                if chartLoadGeneration == generation {
+                    Log.error("MF Chart error: \(error)")
+                }
+            }
+        }
+    }
+
+    private func loadHolfuyChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+            do {
+                // Map timeFrame picker values to actual hours
+                let hours: Int
+                switch timeFrame {
+                case 60: hours = 2
+                case 36: hours = 6
+                case 144: hours = 24
+                case 288: hours = 48
+                default: hours = 2
+                }
+
+                // Use direct Holfuy API for history (~5 days available)
+                let history = try await HolfuyHistoryService.shared.fetchHistory(stationId: stationId, hours: hours)
+
+                guard chartLoadGeneration == generation else { return }
+
+                Log.data("Holfuy Chart: Loading \(history.count) observations for \(stationId) (last \(hours)h)")
+
+                // Convert to WCChartSample format
+                var samples: [WCChartSample] = []
+                for obs in history {
+                    samples.append(WCChartSample(
+                        id: "\(obs.timestamp.timeIntervalSince1970)_wind",
+                        t: obs.timestamp,
+                        value: obs.windSpeed,
+                        kind: .wind
+                    ))
+                    if obs.gustSpeed > 0 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_gust",
+                            t: obs.timestamp,
+                            value: obs.gustSpeed,
+                            kind: .gust
+                        ))
+                    }
+                    if obs.direction >= 0 && obs.direction <= 360 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_dir",
+                            t: obs.timestamp,
+                            value: obs.direction,
+                            kind: .dir
+                        ))
+                    }
+                }
+
+                samples.sort { $0.t < $1.t }
+                stationSamples = samples
+                Log.data("Holfuy Chart: Created \(samples.count) samples")
+            } catch {
+                if chartLoadGeneration == generation {
+                    Log.error("Holfuy Chart error: \(error)")
+                    stationSamples = []
+                }
+            }
+        }
+    }
+
+    private func loadWindguruChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+            do {
+                // Map timeFrame picker values to actual hours
+                let hours: Int
+                switch timeFrame {
+                case 60: hours = 2
+                case 36: hours = 6
+                case 144: hours = 24
+                case 288: hours = 48
+                default: hours = 2
+                }
+
+                // Use Vercel API for Windguru history (accumulates over time)
+                let history = try await GoWindVercelService.shared.fetchHistory(stationId: stationId, hours: hours)
+
+                guard chartLoadGeneration == generation else { return }
+
+                let cutoffDate = Date().addingTimeInterval(-Double(hours) * 3600)
+                let filtered = history.filter { $0.timestamp >= cutoffDate }
+
+                Log.data("Windguru Chart: Loading \(filtered.count)/\(history.count) observations for \(stationId) (last \(hours)h)")
+
+                var samples: [WCChartSample] = []
+                for obs in filtered {
+                    samples.append(WCChartSample(
+                        id: "\(obs.timestamp.timeIntervalSince1970)_wind",
+                        t: obs.timestamp,
+                        value: obs.windSpeed,
+                        kind: .wind
+                    ))
+                    if obs.gustSpeed > 0 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_gust",
+                            t: obs.timestamp,
+                            value: obs.gustSpeed,
+                            kind: .gust
+                        ))
+                    }
+                    if obs.direction >= 0 && obs.direction <= 360 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_dir",
+                            t: obs.timestamp,
+                            value: obs.direction,
+                            kind: .dir
+                        ))
+                    }
+                }
+
+                samples.sort { $0.t < $1.t }
+                stationSamples = samples
+                Log.data("Windguru Chart: Created \(samples.count) samples")
+            } catch {
+                if chartLoadGeneration == generation {
+                    Log.error("Windguru Chart error: \(error)")
+                    stationSamples = []
+                }
+            }
+        }
+    }
+
+    private func loadPioupiouChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+            do {
+                // Map timeFrame picker values to actual hours
+                let hours: Int
+                switch timeFrame {
+                case 60: hours = 2
+                case 36: hours = 6
+                case 144: hours = 24
+                case 288: hours = 48
+                default: hours = 2
+                }
+
+                // Use official Pioupiou Archive API (faster, direct)
+                let history = try await PioupiouVercelService.shared.fetchHistoryDirect(stationId: stationId, hours: hours)
+
+                guard chartLoadGeneration == generation else { return }
+
+                // Filter by actual duration
+                let cutoffDate = Date().addingTimeInterval(-Double(hours) * 3600)
+                let filtered = history.filter { $0.timestamp >= cutoffDate }
+
+                Log.data("Pioupiou Chart: Loading \(filtered.count)/\(history.count) observations for \(stationId) (last \(hours)h)")
+
+                // Convert to WCChartSample format
+                var samples: [WCChartSample] = []
+                for obs in filtered {
+                    // Wind speed
+                    samples.append(WCChartSample(
+                        id: "\(obs.timestamp.timeIntervalSince1970)_wind",
+                        t: obs.timestamp,
+                        value: obs.windSpeed,
+                        kind: .wind
+                    ))
+                    // Gust speed
+                    if obs.gustSpeed > 0 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_gust",
+                            t: obs.timestamp,
+                            value: obs.gustSpeed,
+                            kind: .gust
+                        ))
+                    }
+                    // Direction
+                    if obs.direction >= 0 && obs.direction <= 360 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_dir",
+                            t: obs.timestamp,
+                            value: obs.direction,
+                            kind: .dir
+                        ))
+                    }
+                }
+
+                // Sort by time ascending
+                samples.sort { $0.t < $1.t }
+                stationSamples = samples
+                Log.data("Pioupiou Chart: Created \(samples.count) samples")
+            } catch {
+                if chartLoadGeneration == generation {
+                    Log.error("Pioupiou Chart error: \(error)")
+                    stationSamples = []
+                }
+            }
+        }
+    }
+
+    private func loadDiaboxChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+            do {
+                let hours: Int
+                switch timeFrame {
+                case 60: hours = 2
+                case 36: hours = 6
+                case 144: hours = 24
+                case 288: hours = 48
+                default: hours = 2
+                }
+
+                let rawId = stationId.replacingOccurrences(of: "diabox_", with: "")
+                let history = try await DiaboxService.shared.fetchHistory(stationId: rawId, hours: hours)
+
+                guard chartLoadGeneration == generation else { return }
+
+                let cutoffDate = Date().addingTimeInterval(-Double(hours) * 3600)
+                let filtered = history.filter { $0.timestamp >= cutoffDate }
+
+                Log.data("Diabox Chart: Loading \(filtered.count)/\(history.count) observations for \(stationId) (last \(hours)h)")
+
+                var samples: [WCChartSample] = []
+                for obs in filtered {
+                    samples.append(WCChartSample(
+                        id: "\(obs.timestamp.timeIntervalSince1970)_wind",
+                        t: obs.timestamp,
+                        value: obs.windSpeed,
+                        kind: .wind
+                    ))
+                    if obs.gustSpeed > 0 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_gust",
+                            t: obs.timestamp,
+                            value: obs.gustSpeed,
+                            kind: .gust
+                        ))
+                    }
+                    if obs.direction >= 0 && obs.direction <= 360 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_dir",
+                            t: obs.timestamp,
+                            value: obs.direction,
+                            kind: .dir
+                        ))
+                    }
+                }
+
+                samples.sort { $0.t < $1.t }
+                stationSamples = samples
+                Log.data("Diabox Chart: Created \(samples.count) samples")
+            } catch {
+                if chartLoadGeneration == generation {
+                    Log.error("Diabox Chart error: \(error)")
+                    stationSamples = []
+                }
+            }
+        }
+    }
+
+    private func loadNetatmoChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+            do {
+                let hours: Int
+                switch timeFrame {
+                case 60: hours = 2
+                case 36: hours = 6
+                case 144: hours = 24
+                case 288: hours = 48
+                default: hours = 2
+                }
+
+                let history = try await NetatmoService.shared.fetchHistory(stationId: stationId, hours: hours)
+
+                guard chartLoadGeneration == generation else { return }
+
+                let cutoffDate = Date().addingTimeInterval(-Double(hours) * 3600)
+                let filtered = history.filter { $0.timestamp >= cutoffDate }
+
+                Log.data("Netatmo Chart: Loading \(filtered.count)/\(history.count) observations for \(stationId) (last \(hours)h)")
+
+                var samples: [WCChartSample] = []
+                for obs in filtered {
+                    samples.append(WCChartSample(
+                        id: "\(obs.timestamp.timeIntervalSince1970)_wind",
+                        t: obs.timestamp,
+                        value: obs.windSpeed,
+                        kind: .wind
+                    ))
+                    if obs.gustSpeed > 0 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_gust",
+                            t: obs.timestamp,
+                            value: obs.gustSpeed,
+                            kind: .gust
+                        ))
+                    }
+                    if obs.direction >= 0 && obs.direction <= 360 {
+                        samples.append(WCChartSample(
+                            id: "\(obs.timestamp.timeIntervalSince1970)_dir",
+                            t: obs.timestamp,
+                            value: obs.direction,
+                            kind: .dir
+                        ))
+                    }
+                }
+
+                samples.sort { $0.t < $1.t }
+                stationSamples = samples
+                Log.data("Netatmo Chart: Created \(samples.count) samples")
+            } catch {
+                if chartLoadGeneration == generation {
+                    Log.error("Netatmo Chart error: \(error)")
+                    stationSamples = []
+                }
+            }
+        }
+    }
+
+    private func loadNDBCChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+
+            let hours: Int
+            switch timeFrame {
+            case 60: hours = 2
+            case 36: hours = 6
+            case 144: hours = 24
+            case 288: hours = 48
+            default: hours = 2
+            }
+
+            let history = await NDBCService.shared.fetchHistory(stationId: stationId, hours: hours)
+
+            guard chartLoadGeneration == generation else { return }
+
+            let cutoffDate = Date().addingTimeInterval(-Double(hours) * 3600)
+            let filtered = history.filter { Date(timeIntervalSince1970: $0.ts) >= cutoffDate }
+
+            var samples: [WCChartSample] = []
+            for obs in filtered {
+                let date = Date(timeIntervalSince1970: obs.ts)
+                samples.append(WCChartSample(
+                    id: "\(obs.ts)_wind",
+                    t: date,
+                    value: obs.ws.moy.value ?? 0,
+                    kind: .wind
+                ))
+                if let gustVal = obs.ws.max.value, gustVal > 0 {
+                    samples.append(WCChartSample(
+                        id: "\(obs.ts)_gust",
+                        t: date,
+                        value: gustVal,
+                        kind: .gust
+                    ))
+                }
+                if let dirVal = obs.wd.moy.value, dirVal >= 0 && dirVal <= 360 {
+                    samples.append(WCChartSample(
+                        id: "\(obs.ts)_dir",
+                        t: date,
+                        value: dirVal,
+                        kind: .dir
+                    ))
+                }
+            }
+
+            samples.sort { $0.t < $1.t }
+            stationSamples = samples
+        }
+    }
+
+    private func loadWindCornouailleChart(stationId: String) {
+        chartLoadGeneration += 1
+        let generation = chartLoadGeneration
+        isChartLoading = true
+        Task {
+            defer { if chartLoadGeneration == generation { isChartLoading = false } }
+            do {
+                let result = try await WindService.fetchChartWC(sensorId: stationId, timeFrame: timeFrame)
+                guard chartLoadGeneration == generation else { return }
+                stationSamples = result.samples
+            } catch {
+                if chartLoadGeneration == generation {
+                    stationSamples = []
+                }
+            }
+        }
+    }
+
+    private func loadForecast(stationId: String, stationName: String, latitude: Double, longitude: Double) {
+        Analytics.forecastLoaded(stationId: stationId, source: "forecast")
+        forecastLoading = true
+        Task {
+            do {
+                let data = try await ForecastService.shared.fetchForecast(latitude: latitude, longitude: longitude)
+                self.forecast = data
+
+                // Store forecasts for accuracy tracking
+                ForecastAccuracyService.shared.storeForecast(
+                    stationId: stationId,
+                    stationName: stationName,
+                    latitude: latitude,
+                    longitude: longitude,
+                    forecasts: data.hourly
+                )
+
+                // Update widget with forecast data
+                favoritesManager.updateForecastWidgetData(
+                    forecast: data,
+                    stationId: stationId,
+                    stationName: stationName
+                )
+            } catch {
+                Log.error("Forecast error: \(error)")
+                self.forecast = nil
+                ErrorManager.shared.show(.forecastFailed(stationName))
+            }
+            self.forecastLoading = false
+        }
+    }
+
+    @ViewBuilder
+    private var panelContent: some View {
+            if showPanel, let station = selectedStation {
+                BottomPanel(
+                    sensorName: station.name,
+                    sourceName: station.source.displayName,
+                    sourceColor: station.source.color,
+                    latest: stationLatest(for: station),
+                    samples: stationSamples,
                     timeFrame: $timeFrame,
-                    lastUpdatedAt: vm.lastUpdatedAt,
+                    lastUpdatedAt: Date(),
+                    measurementDate: station.lastUpdate,
+                    hadError: false,
+                    chartLoading: isChartLoading,
+                    isRefreshing: stationManager.isLoading,
+                    limitedHistory: false,  // WindsUp has 22+ hours of data
+                    forecast: forecast,
+                    forecastLoading: forecastLoading,
+                    tideData: currentTideData,
+                    isFavorite: favoritesManager.isFavorite(stationId: station.stableId),
+                    onToggleFavorite: {
+                        haptic(.medium)
+                        favoritesManager.toggleFavorite(station: station)
+                    },
+                    stationId: station.stableId,
+                    hasWindAlert: notificationManager.hasAlert(for: station.stableId),
+                    onConfigureAlert: {
+                        haptic(.light)
+                        showAlertConfig = true
+                    },
+                    stationSource: station.source,
+                    latitude: station.latitude,
+                    longitude: station.longitude,
+                    altitude: station.altitude,
+                    stationDescription: station.stationDescription,
+                    pressure: station.pressure,
+                    temperature: station.temperature,
+                    humidity: station.humidity,
                     touchX: $touchX,
                     touchWind: $touchSampleWind,
                     touchGust: $touchSampleGust,
+                    touchDir: $touchSampleDir,
                     onClose: {
                         haptic(.light)
+                        isCenteringCamera = false
                         withAnimation(panelAnim) {
-                            showChartFull = false
+                            showPanel = false
+                            selectedStation = nil
+                        }
+                    },
+                    onForecastTap: {
+                        haptic(.light)
+                        showForecastFull = true
+                    },
+                    onTideTap: {
+                        haptic(.light)
+                        showTideDetail = true
+                    }
+                )
+                .modifier(PanelPaddingModifier(isRegular: horizontalSizeClass == .regular))
+                .transition(panelTransition)
+            } else if showWavePanel, let waveBuoy = selectedWaveBuoy {
+                WaveBuoyBottomPanel(
+                    buoy: waveBuoy,
+                    isFavorite: favoritesManager.isFavorite(buoyId: waveBuoy.id),
+                    onToggleFavorite: {
+                        haptic(.medium)
+                        favoritesManager.toggleFavorite(buoy: waveBuoy)
+                    },
+                    onClose: {
+                        haptic(.light)
+                        isCenteringCamera = false
+                        withAnimation(panelAnim) {
+                            showWavePanel = false
+                            selectedWaveBuoy = nil
                         }
                     }
                 )
-            }
-        }
-    }
-
-    private var mapWithSettings: AnyView {
-        let selectedId = selected?.id
-        let latest = vm.latestBySensorId
-        let stations = goWind.stations
-        let status = goWind.lastStatusCode
-        let decoded = goWind.lastDecodedItems
-        let total = goWind.lastTotalItems
-        let center: CLLocationCoordinate2D = camera.region?.center ?? CLLocationCoordinate2D(latitude: 46.9, longitude: -2.7)
-
-        return AnyView(
-            buildMapLayerView(
-                center: center,
-                selectedId: selectedId,
-                latest: latest,
-                stations: stations,
-                status: status,
-                decoded: decoded,
-                total: total
-            )
-        )
-    }
-
-    private func buildMapLayerView(
-        center: CLLocationCoordinate2D,
-        selectedId: String?,
-        latest: [String: WCWindObservation],
-        stations: [GoWindStation],
-        status: Int?,
-        decoded: Int,
-        total: Int
-    ) -> some View {
-        MapLayerView(
-            camera: $camera,
-            cameraCenter: center,
-            sensors: sensors,
-            selectedId: selectedId,
-            latestBySensorId: latest,
-            goWindStations: stations,
-            goWindStatusCode: status,
-            goWindDecoded: decoded,
-            goWindTotal: total,
-            onTapSensor: { s in
-                haptic(.medium)
-                select(sensor: s, animated: true)
-            },
-            onTapSettings: {
-                haptic(.light)
-                showSettings = true
-            },
-            onTapScope: {
-                withAnimation(.smooth(duration: 0.55)) {
-                    camera = .region(
-                        MKCoordinateRegion(
-                            center: CLLocationCoordinate2D(latitude: 46.9, longitude: -2.7),
-                            span: MKCoordinateSpan(latitudeDelta: 3.8, longitudeDelta: 4.8)
-                        )
-                    )
-                }
-            }
-        )
-    }
-
-
-
-    private var panelLayer: AnyView {
-        AnyView(
-            VStack {
-                Spacer()
-                if showPanel, let selected = selected {
-                    BottomPanel(
-                        sensorName: selected.name,
-                        latest: vm.latestBySensorId[selected.id],
-                        samples: vm.samples,
-                        timeFrame: $timeFrame,
-                        lastUpdatedAt: vm.lastUpdatedAt,
-                        hadError: vm.hadRecentError,
-                        touchX: $touchX,
-                        touchWind: $touchSampleWind,
-                        touchGust: $touchSampleGust,
-                        onClose: {
-                            haptic(.light)
-                            withAnimation(panelAnim) {
-                                showPanel = false
-                                showChartFull = false
-                            }
-                        },
-                        onFullscreen: {
-                            haptic(.light)
-                            withAnimation(panelAnim) {
-                                showChartFull = true
-                            }
+                .modifier(PanelPaddingModifier(isRegular: horizontalSizeClass == .regular))
+                .transition(panelTransition)
+            } else if showKitePanel, let spot = selectedKiteSpot {
+                KiteSpotBottomPanel(
+                    spot: spot,
+                    forecast: kiteSpotForecast,
+                    forecastLoading: kiteSpotForecastLoading,
+                    nearbyStation: nearestStationForKiteSpot,
+                    nearbyBuoy: nearestBuoyForKiteSpot,
+                    tideData: currentTideData,
+                    onClose: {
+                        haptic(.light)
+                        isCenteringCamera = false
+                        withAnimation(panelAnim) {
+                            showKitePanel = false
+                            selectedKiteSpot = nil
                         }
+                    },
+                    onForecastTap: {
+                        haptic(.light)
+                        showForecastFull = true
+                    },
+                    onTideTap: {
+                        haptic(.light)
+                        showTideDetail = true
+                    }
+                )
+                .modifier(PanelPaddingModifier(isRegular: horizontalSizeClass == .regular))
+                .transition(panelTransition)
+            } else if showSurfPanel, let spot = selectedSurfSpot {
+                SurfSpotBottomPanel(
+                    spot: spot,
+                    nearbyBuoy: nearestBuoyForSurfSpot,
+                    tideData: currentTideData,
+                    onClose: {
+                        haptic(.light)
+                        isCenteringCamera = false
+                        withAnimation(panelAnim) {
+                            showSurfPanel = false
+                            selectedSurfSpot = nil
+                        }
+                    },
+                    onTideTap: {
+                        haptic(.light)
+                        showTideDetail = true
+                    }
+                )
+                .modifier(PanelPaddingModifier(isRegular: horizontalSizeClass == .regular))
+                .transition(panelTransition)
+            } else if showParaglidingPanel, let spot = selectedParaglidingSpot {
+                ParaglidingSpotBottomPanel(
+                    spot: spot,
+                    forecast: paraglidingSpotForecast,
+                    forecastLoading: paraglidingSpotForecastLoading,
+                    nearbyStation: nearestStationForParaglidingSpot,
+                    nearbyWebcam: nearestWebcamForParaglidingSpot,
+                    onClose: {
+                        haptic(.light)
+                        isCenteringCamera = false
+                        withAnimation(panelAnim) {
+                            showParaglidingPanel = false
+                            selectedParaglidingSpot = nil
+                        }
+                    },
+                    onForecastTap: {
+                        haptic(.light)
+                        showForecastFull = true
+                    }
+                )
+                .modifier(PanelPaddingModifier(isRegular: horizontalSizeClass == .regular))
+                .transition(panelTransition)
+            }
+    }
+
+    // MARK: - Top: Search Pill
+
+    private var searchPillContent: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            TextField("Rechercher un spot ou une station", text: $searchText)
+                .focused($isSearchFocused)
+                .font(.system(size: 15))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+
+            if isSearchFocused && !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isSearchFocused {
+                Button("Annuler") {
+                    searchText = ""
+                    isSearchFocused = false
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.primary)
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Capsule())
+        .modifier(LiquidGlassCapsuleModifier())
+        .animation(.easeOut(duration: 0.15), value: isSearchFocused)
+    }
+
+    // MARK: - Search Results
+
+    private func matchesSearch(_ text: String, _ query: String) -> Bool {
+        text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
+    private var searchResults: [SearchResult] {
+        guard searchText.count >= 2 else { return [] }
+        let query = searchText
+        var all: [SearchResult] = []
+
+        for station in cachedFilteredStations where matchesSearch(station.name, query) {
+            all.append(SearchResult(
+                id: "station_\(station.stableId)", name: station.name,
+                subtitle: "Station \(station.source.displayName)",
+                type: .windStation(station), iconName: "sensor.fill", iconColor: station.source.color
+            ))
+            if all.count >= 20 { return all }
+        }
+
+        for spot in kiteSpots where matchesSearch(spot.name, query) {
+            all.append(SearchResult(
+                id: "kite_\(spot.id)", name: spot.name,
+                subtitle: "Kite · \(spot.level.rawValue) · \(spot.orientation)",
+                type: .kiteSpot(spot), iconName: "wind", iconColor: .orange
+            ))
+            if all.count >= 20 { return all }
+        }
+
+        for spot in allSurfSpots where matchesSearch(spot.name, query) {
+            all.append(SearchResult(
+                id: "surf_\(spot.id)", name: spot.name,
+                subtitle: "Surf · \(spot.level.rawValue) · \(spot.waveType.rawValue)",
+                type: .surfSpot(spot), iconName: "water.waves", iconColor: .cyan
+            ))
+            if all.count >= 20 { return all }
+        }
+
+        for spot in paraglidingSpots where matchesSearch(spot.name, query) {
+            all.append(SearchResult(
+                id: "paragliding_\(spot.id)", name: spot.name,
+                subtitle: "Parapente · \(spot.type.rawValue)",
+                type: .paraglidingSpot(spot), iconName: "arrow.up.right.circle.fill", iconColor: .red
+            ))
+            if all.count >= 20 { return all }
+        }
+
+        return all
+    }
+
+    private var searchResultsOverlay: some View {
+        VStack(spacing: 0) {
+            if searchResults.isEmpty {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    Text("Aucun resultat")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.system(size: 15, weight: .medium))
+                .padding(.vertical, 20)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(searchResults) { result in
+                            Button {
+                                selectSearchResult(result)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: result.iconName)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(result.iconColor)
+                                        .frame(width: 32, height: 32)
+                                        .background(result.iconColor.opacity(0.15))
+                                        .clipShape(Circle())
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(result.name)
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        Text(result.subtitle)
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .frame(maxHeight: 350)
+            }
+        }
+        .padding(12)
+        .modifier(LiquidGlassRoundedModifier(cornerRadius: 16))
+        .padding(.horizontal, 16)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    private let searchZoomSpan = MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
+
+    private func selectSearchResult(_ result: SearchResult) {
+        searchText = ""
+        isSearchFocused = false
+
+        switch result.type {
+        case .windStation(let station):
+            haptic(.medium)
+            stationSamples = []
+            forecast = nil
+            selectedStation = station
+            selectedWaveBuoy = nil
+            showWavePanel = false
+            showPanel = true
+            centerOnAnnotation(coordinate: CLLocationCoordinate2D(latitude: station.latitude, longitude: station.longitude), zoomSpan: searchZoomSpan)
+            loadForecast(stationId: station.stableId, stationName: station.name, latitude: station.latitude, longitude: station.longitude)
+            // Load chart data
+            if station.source == .windsUp {
+                if timeFrame == 288 { timeFrame = 144 }
+                loadWindsUpChart(stationId: station.id)
+            } else if station.source == .meteoFrance {
+                loadMeteoFranceChart(stationId: station.id)
+            } else if station.source == .holfuy {
+                loadHolfuyChart(stationId: station.stableId)
+            } else if station.source == .windguru {
+                loadWindguruChart(stationId: station.stableId)
+            } else if station.source == .pioupiou {
+                loadPioupiouChart(stationId: station.stableId)
+            } else if station.source == .diabox {
+                if timeFrame == 288 { timeFrame = 144 }
+                loadDiaboxChart(stationId: station.stableId)
+            } else if station.source == .windCornouaille {
+                loadWindCornouailleChart(stationId: station.id)
+            }
+        case .kiteSpot(let spot):
+            haptic(.medium)
+            selectedKiteSpot = spot
+            showKitePanel = true
+            showPanel = false
+            showWavePanel = false
+            showSurfPanel = false
+            showParaglidingPanel = false
+            centerOnAnnotation(coordinate: spot.coordinate, zoomSpan: searchZoomSpan)
+            loadKiteSpotForecast(spot: spot)
+        case .surfSpot(let spot):
+            haptic(.medium)
+            selectedSurfSpot = spot
+            showSurfPanel = true
+            showPanel = false
+            showWavePanel = false
+            showKitePanel = false
+            showParaglidingPanel = false
+            centerOnAnnotation(coordinate: spot.coordinate, zoomSpan: searchZoomSpan)
+        case .paraglidingSpot(let spot):
+            haptic(.medium)
+            selectedParaglidingSpot = spot
+            showParaglidingPanel = true
+            showPanel = false
+            showWavePanel = false
+            showKitePanel = false
+            showSurfPanel = false
+            centerOnAnnotation(coordinate: spot.coordinate, zoomSpan: searchZoomSpan)
+            paraglidingSpotForecastLoading = true
+            paraglidingSpotForecast = nil
+            Task {
+                do {
+                    let data = try await ForecastService.shared.fetchForecast(
+                        latitude: spot.latitude,
+                        longitude: spot.longitude,
+                        model: .arome
                     )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .padding(.bottom, 10)
-                    .padding(.horizontal, 12)
+                    await MainActor.run {
+                        paraglidingSpotForecast = data
+                        paraglidingSpotForecastLoading = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        paraglidingSpotForecastLoading = false
+                    }
                 }
             }
+        }
+    }
+
+    // MARK: - Filter Pills Content
+
+    private var filterPillsContent: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                // Tide widget inline
+                if showTideWidget, let tideData = currentTideData {
+                    TideWidget(tideData: tideData, onTap: {
+                        haptic(.light)
+                        showTideDetail = true
+                    })
+                }
+
+                filterPill(
+                    icon: "figure.sailing",
+                    label: "Kite",
+                    isActive: showKiteSpots,
+                    activeColor: .orange,
+                    action: { haptic(.light); showKiteSpots.toggle() }
+                )
+
+                filterPill(
+                    icon: "surfboard.fill",
+                    label: "Surf",
+                    isActive: showSurfSpots,
+                    activeColor: .cyan,
+                    action: { haptic(.light); showSurfSpots.toggle() }
+                )
+
+                filterPill(
+                    icon: "arrow.up.right.circle.fill",
+                    label: "Parapente",
+                    isActive: showParaglidingSpots,
+                    activeColor: .red,
+                    action: { haptic(.light); showParaglidingSpots.toggle() }
+                )
+
+                filterPill(
+                    icon: "checkmark.seal.fill",
+                    label: "Praticable",
+                    isActive: showPraticableSpots,
+                    activeColor: .green,
+                    action: { togglePraticableSpots() },
+                    isLoading: isLoadingSpotScores
+                )
+
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func filterPill(
+        icon: String,
+        label: String,
+        isActive: Bool,
+        activeColor: Color,
+        action: @escaping () -> Void,
+        isLoading: Bool = false
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(isActive ? activeColor : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .modifier(LiquidGlassCapsuleModifier())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Bottom Left Content
+
+    private var bottomLeadingContent: some View {
+        VStack(spacing: 10) {
+            Button {
+                haptic(.light)
+                showMapStylePicker = true
+            } label: {
+                Image(systemName: mapStyle.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+                    .modifier(LiquidGlassCircleModifier())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                haptic(.light)
+                showUserLocation.toggle()
+                if showUserLocation {
+                    locationManager.requestLocation()
+                    if let loc = locationManager.userLocation {
+                        zoomToLocation(loc)
+                    } else {
+                        needsLocationZoom = true
+                    }
+                } else {
+                    needsLocationZoom = false
+                }
+            } label: {
+                Image(systemName: showUserLocation ? "location.fill" : "location")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(showUserLocation ? .blue : .primary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+                    .modifier(LiquidGlassCircleModifier())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                guard !stationManager.isLoading else { return }
+                haptic(.light)
+                Task {
+                    let loc = locationManager.userLocation?.clCoordinate
+                    await stationManager.refresh(sources: enabledSources, userLocation: loc)
+                    if enabledSources.contains(.holfuy) {
+                        await stationManager.refreshHolfuyDirect(userLocation: loc)
+                    }
+                }
+            } label: {
+                ZStack {
+                    if stationManager.isLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: !networkMonitor.isConnected ? "wifi.slash" : stationManager.isUsingCache ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(!networkMonitor.isConnected ? .red : stationManager.isUsingCache ? .orange : .primary)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .modifier(LiquidGlassCircleModifier())
+            }
+            .buttonStyle(.plain)
+            .disabled(stationManager.isLoading)
+        }
+    }
+
+    // MARK: - Bottom Right Content
+
+    private var bottomTrailingContent: some View {
+        VStack(spacing: 10) {
+            // Windy button
+            Button {
+                haptic(.light)
+                toggleWindOverlay()
+            } label: {
+                Image(systemName: "wind")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+                    .modifier(LiquidGlassCircleModifier())
+            }
+            .buttonStyle(.plain)
+
+            // Webcams button
+            if remoteConfig.enableWebcams {
+                Button {
+                    haptic(.light)
+                    showWebcamsOnMap.toggle()
+                } label: {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(showWebcamsOnMap ? .cyan : .primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                        .modifier(LiquidGlassCircleModifier())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+
+
+    private func stationLatest(for station: WindStation) -> WCWindObservation {
+        let timestamp = station.lastUpdate?.timeIntervalSince1970 ?? Date().timeIntervalSince1970
+        return WCWindObservation(
+            ts: timestamp,
+            ws: WCWindSpeed(moy: WCScalar(station.wind), max: WCScalar(station.gust)),
+            wd: WCWindDir(moy: WCScalar(station.direction))
         )
     }
 
 
-    private func select(sensor: SensorConfig, animated: Bool) {
-        withAnimation(panelAnim) {
-            selected = sensor
-            showPanel = true
-            showChartFull = false
-        }
+    // Pre-initialized haptic generators for instant feedback
+    private static let lightHaptic: UIImpactFeedbackGenerator = {
+        let g = UIImpactFeedbackGenerator(style: .light)
+        g.prepare()
+        return g
+    }()
+    private static let mediumHaptic: UIImpactFeedbackGenerator = {
+        let g = UIImpactFeedbackGenerator(style: .medium)
+        g.prepare()
+        return g
+    }()
 
-        if animated {
-            withAnimation(cameraAnim) {
-                let span = MKCoordinateSpan(latitudeDelta: 0.55, longitudeDelta: 0.75)
-                // Move map center slightly south so the selected marker sits higher on screen (above the bottom panel)
-                let yOffset = span.latitudeDelta * 0.22
-                let centered = CLLocationCoordinate2D(
-                    latitude: sensor.coordinate.latitude - yOffset,
-                    longitude: sensor.coordinate.longitude
-                )
-                camera = .region(MKCoordinateRegion(center: centered, span: span))
-            }
-        } else {
-            let span = MKCoordinateSpan(latitudeDelta: 0.55, longitudeDelta: 0.75)
-            let yOffset = span.latitudeDelta * 0.22
-            let centered = CLLocationCoordinate2D(
-                latitude: sensor.coordinate.latitude - yOffset,
-                longitude: sensor.coordinate.longitude
-            )
-            camera = .region(MKCoordinateRegion(center: centered, span: span))
-        }
-
-        Task { await vm.loadSelected(sensorId: sensor.id, timeFrame: timeFrame) }
+    private func toggleWindOverlay() {
+        // Show Windy fullscreen overlay
+        showWindyFullscreen = true
+        Analytics.overlayToggled(type: "wind", enabled: true)
     }
 
     private func haptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        let g = UIImpactFeedbackGenerator(style: style)
-        g.prepare()
-        g.impactOccurred()
-    }
-}
-
-
-// MARK: - Map layer extracted (helps compiler type-check)
-
-private struct MapLayerView: View {
-    @Binding var camera: MapCameraPosition
-    let cameraCenter: CLLocationCoordinate2D
-
-    let sensors: [SensorConfig]
-    let selectedId: String?
-    let latestBySensorId: [String: WCWindObservation]
-
-    let goWindStations: [GoWindStation]
-    let goWindStatusCode: Int?
-    let goWindDecoded: Int
-    let goWindTotal: Int
-
-    let onTapSensor: (SensorConfig) -> Void
-    let onTapSettings: () -> Void
-    let onTapScope: () -> Void
-
-    private var goWindBadgeText: String {
-        let codeText = goWindStatusCode.map(String.init) ?? "—"
-        return "GoWind: \(goWindDecoded)/\(goWindTotal) (\(codeText))"
-    }
-
-    var body: some View {
-        mapView
-            .ignoresSafeArea()
-            .overlay(alignment: .topTrailing) { settingsButton }
-            .overlay(alignment: .topLeading) { goWindHUD }
-    }
-
-    private var mapView: some View {
-        Map(position: $camera) {
-            sensorAnnotations()
-            goWindAnnotations()
+        switch style {
+        case .light:
+            Self.lightHaptic.impactOccurred()
+            Self.lightHaptic.prepare()
+        case .medium:
+            Self.mediumHaptic.impactOccurred()
+            Self.mediumHaptic.prepare()
+        default:
+            let g = UIImpactFeedbackGenerator(style: style)
+            g.impactOccurred()
         }
-        .mapStyle(.standard)
     }
 
-    @MapContentBuilder
-    private func sensorAnnotations() -> some MapContent {
-        ForEach(sensors) { s in
-            Annotation("", coordinate: s.coordinate, anchor: .center) {
-                SensorMarker(
-                    name: s.name,
-                    latest: latestBySensorId[s.id],
-                    isSelected: s.id == selectedId
+    // MARK: - Praticable Spots
+
+    private func togglePraticableSpots() {
+        print("🔘 Toggle praticable spots: \(showPraticableSpots) -> \(!showPraticableSpots)")
+        showPraticableSpots.toggle()
+        if showPraticableSpots {
+            haptic(.medium)
+            loadPraticableSpots()
+        } else {
+            spotScores = [:]
+        }
+    }
+
+    private func loadPraticableSpots() {
+        guard !isLoadingSpotScores else { return }
+        isLoadingSpotScores = true
+
+        Task {
+            // Get visible region from camera
+            guard let region = camera.region else {
+                await MainActor.run { isLoadingSpotScores = false }
+                return
+            }
+
+            let minLat = region.center.latitude - region.span.latitudeDelta / 2
+            let maxLat = region.center.latitude + region.span.latitudeDelta / 2
+            let minLon = region.center.longitude - region.span.longitudeDelta / 2
+            let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+
+            // Filter to visible spots only
+            let visibleKiteSpots = kiteSpots.filter { spot in
+                spot.latitude >= minLat && spot.latitude <= maxLat &&
+                spot.longitude >= minLon && spot.longitude <= maxLon
+            }
+            let visibleSurfSpots = allSurfSpots.filter { spot in
+                spot.latitude >= minLat && spot.latitude <= maxLat &&
+                spot.longitude >= minLon && spot.longitude <= maxLon
+            }
+
+            // Filter paragliding spots to visible area
+            let visibleParaglidingSpots = paraglidingSpots.filter { spot in
+                spot.latitude >= minLat && spot.latitude <= maxLat &&
+                spot.longitude >= minLon && spot.longitude <= maxLon
+            }
+
+            print("🎯 Loading praticable spots: \(visibleKiteSpots.count) kite, \(visibleSurfSpots.count) surf, \(visibleParaglidingSpots.count) paragliding")
+
+            var newScores: [String: Int] = [:]
+
+            // Use real station observations for scoring (same data as detail panels)
+            let onlineStations = cachedFilteredStations.filter { $0.isOnline }
+
+            // Evaluate kite spots using nearest wind station data
+            for spot in visibleKiteSpots {
+                guard let station = findNearestStation(
+                    latitude: spot.latitude, longitude: spot.longitude,
+                    stations: onlineStations, maxDistance: 30_000
+                ) else { continue }
+                let rating = KiteConditionRating.evaluate(
+                    wind: station.wind,
+                    gust: station.gust,
+                    direction: station.direction,
+                    spot: spot,
+                    dangerThreshold: Double(kiteMaxWindThreshold),
+                    riderLevel: KiteRiderLevel(rawValue: kiteRiderLevelRaw) ?? .intermediate
                 )
-                .onTapGesture { onTapSensor(s) }
+                newScores[spot.id] = rating.score
             }
-        }
-    }
+            print("✅ Calculated \(visibleKiteSpots.count) kite scores")
 
-    private var limitedGoWindStations: [GoWindStation] {
-        closestStations(to: cameraCenter, from: goWindStations, limit: 650)
-    }
-
-    @MapContentBuilder
-    private func goWindAnnotations() -> some MapContent {
-        ForEach(limitedGoWindStations, id: \.stableId) { st in
-            Annotation("", coordinate: st.coordinate, anchor: .center) {
-                GoWindMarker(station: st)
+            // Evaluate paragliding spots using nearest wind station data
+            for spot in visibleParaglidingSpots {
+                guard let station = findNearestStation(
+                    latitude: spot.latitude, longitude: spot.longitude,
+                    stations: onlineStations, maxDistance: 30_000
+                ) else { continue }
+                let rating = ParaglidingConditionRating.evaluate(
+                    wind: station.wind,
+                    gust: station.gust,
+                    direction: station.direction,
+                    spot: spot
+                )
+                newScores[spot.id] = rating.score
             }
-        }
-    }
+            print("✅ Calculated \(visibleParaglidingSpots.count) paragliding scores")
 
-    private func closestStations(to center: CLLocationCoordinate2D, from stations: [GoWindStation], limit: Int) -> [GoWindStation] {
-        guard !stations.isEmpty else { return [] }
-        // Filter obvious invalid coords (extra safety)
-        let valid = stations.filter { st in
-            let lat = st.coordinate.latitude
-            let lon = st.coordinate.longitude
-            return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 && !(lat == 0 && lon == 0)
-        }
-        // Sort by distance to center and cap
-        return valid
-            .sorted { a, b in
-                haversineKm(center, a.coordinate) < haversineKm(center, b.coordinate)
-            }
-            .prefix(limit)
-            .map { $0 }
-    }
+            // Fetch wave forecasts for surf spots (uses swell data, not wind)
+            if !visibleSurfSpots.isEmpty {
+                await SurfForecastService.shared.fetchForecasts(for: visibleSurfSpots)
 
-    private func haversineKm(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
-        let r = 6371.0
-        let lat1 = a.latitude * .pi / 180
-        let lat2 = b.latitude * .pi / 180
-        let dLat = (b.latitude - a.latitude) * .pi / 180
-        let dLon = (b.longitude - a.longitude) * .pi / 180
-        let s1 = sin(dLat / 2)
-        let s2 = sin(dLon / 2)
-        let h = s1 * s1 + cos(lat1) * cos(lat2) * s2 * s2
-        return 2 * r * asin(min(1, sqrt(h)))
-    }
-
-    private var settingsButton: some View {
-        Button(action: onTapSettings) {
-            Image(systemName: "gearshape")
-                .font(.system(size: 16, weight: .semibold))
-                .padding(8)
-                .background(.thinMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .padding(.trailing, 12)
-        .padding(.top, 6)
-    }
-
-    private var goWindHUD: some View {
-        HStack(spacing: 8) {
-            Text(goWindBadgeText)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.thinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
-
-            Button(action: onTapScope) {
-                Image(systemName: "scope")
-                    .font(.system(size: 14, weight: .semibold))
-                    .padding(8)
-                    .background(.thinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.leading, 12)
-        .padding(.top, 6)
-    }
-}
-
-// MARK: - Sensor Marker (small arrow + colored numbers)
-
-private struct SensorMarker: View {
-    let name: String
-    let latest: WCWindObservation?
-    let isSelected: Bool
-
-    private var wind: Double? { latest?.ws.moy.value }
-    private var gust: Double? { latest?.ws.max.value }
-    private var dir: Double?  { latest?.wd.moy.value }
-
-    var body: some View {
-        VStack(spacing: 4) {
-            CleanArrow(deg: dir ?? 0, isSelected: isSelected)
-            CapsulePill(wind: wind, gust: gust, isSelected: isSelected)
-        }
-    }
-}
-
-private struct CapsulePill: View {
-    let wind: Double?
-    let gust: Double?
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Text(fmt(wind))
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(color(wind))
-
-            Text("/")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            Text(fmt(gust))
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(color(gust))
-
-            Text("nds")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(
-            Capsule().strokeBorder(Color.white.opacity(isSelected ? 0.16 : 0.10), lineWidth: isSelected ? 1.2 : 0.9)
-        )
-        .shadow(radius: isSelected ? 5 : 2)
-    }
-
-    private func fmt(_ v: Double?) -> String {
-        guard let v else { return "—" }
-        return "\(Int(round(v)))"
-    }
-
-    private func color(_ v: Double?) -> Color {
-        guard let v else { return .secondary }
-        return windScale(v)
-    }
-}
-
-// MARK: - Arrow (not colored)
-
-private struct CleanArrow: View {
-    let deg: Double
-    let isSelected: Bool
-
-    var body: some View {
-        Image(systemName: "arrow.up")
-            .font(.system(size: isSelected ? 16 : 14, weight: .semibold))
-            .foregroundStyle(.primary.opacity(isSelected ? 1.0 : 0.9))
-            .rotationEffect(.degrees(deg + 180))
-            .padding(5)
-            .background(
-                Circle().fill(.thinMaterial).opacity(isSelected ? 0.55 : 0.35)
-            )
-            .overlay(
-                Circle().strokeBorder(Color.white.opacity(isSelected ? 0.14 : 0.08), lineWidth: 0.8)
-            )
-            .shadow(radius: isSelected ? 3 : 1)
-    }
-}
-
-// MARK: - Status Pill (Online / Offline)
-
-private struct StatusPill: View {
-    let isOnline: Bool
-    @State private var pulse = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(isOnline ? Color.green : Color.secondary)
-                .frame(width: 6, height: 6)
-                .opacity(isOnline ? (pulse ? 0.35 : 0.9) : 0.6)
-                .scaleEffect(isOnline ? (pulse ? 0.92 : 1.0) : 1.0)
-
-            Text(isOnline ? "En ligne" : "Hors ligne")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(
-            Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .onAppear {
-            guard isOnline else { return }
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
-                pulse.toggle()
-            }
-        }
-    }
-}
-
-// MARK: - Bottom Panel
-
-private struct BottomPanel: View {
-    let sensorName: String
-    let latest: WCWindObservation?
-    let samples: [WCChartSample]
-    @Binding var timeFrame: Int
-    let lastUpdatedAt: Date?
-    let hadError: Bool
-
-    @Binding var touchX: Date?
-    @Binding var touchWind: Double?
-    @Binding var touchGust: Double?
-
-    let onClose: () -> Void
-    let onFullscreen: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-
-            HStack {
-                Text(sensorName)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-
-                Spacer()
-
-                Button(action: onFullscreen) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-            }
-
-            HStack(spacing: 10) {
-                StatCard(title: "Vent", value: statWind)
-                StatCard(title: "Rafales", value: statGust)
-                StatCard(title: "Dir", value: statDir)
-            }
-
-            Picker("Période", selection: $timeFrame) {
-                Text("2 h").tag(60)
-                Text("6 h").tag(36)
-                Text("24 h").tag(144)
-            }
-            .pickerStyle(.segmented)
-
-            WindChart(samples: samples.filter { $0.kind == .wind || $0.kind == .gust })
-                .frame(height: 220)
-                .chartOverlay { proxy in
-                    GeometryReader { geo in
-                        ZStack(alignment: .topLeading) {
-                            Rectangle().fill(.clear).contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { v in
-                                            guard let plot = proxy.plotFrame else { return }
-                                            let frame = geo[plot]
-                                            let x = v.location.x - frame.origin.x
-                                            if let date: Date = proxy.value(atX: x) {
-                                                touchX = date
-                                                updateTouchValues(for: date)
-                                            }
-                                        }
-                                        .onEnded { _ in
-                                            touchX = nil
-                                            touchWind = nil
-                                            touchGust = nil
-                                        }
-                                )
-
-                            if let t = touchX,
-                               let plot = proxy.plotFrame,
-                               let xPos = proxy.position(forX: t) {
-                                let x = geo[plot].origin.x + xPos
-
-                                Path { p in
-                                    p.move(to: CGPoint(x: x, y: geo[plot].minY))
-                                    p.addLine(to: CGPoint(x: x, y: geo[plot].maxY))
-                                }
-                                .stroke(
-                                    Color.primary.opacity(0.18),
-                                    style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [4, 4])
-                                )
-                                .allowsHitTesting(false)
-                            }
-                        }
+                for spot in visibleSurfSpots {
+                    if let waveForecast = SurfForecastService.shared.currentForecast(for: spot.id) {
+                        let rating = evaluateSurfConditionsFromForecast(spot: spot, forecast: waveForecast, tide: nil)
+                        newScores[spot.id] = rating.score
+                    } else {
+                        newScores[spot.id] = 0
                     }
                 }
-                .overlay(alignment: .topLeading) {
-                    if let t = touchX {
-                        Tooltip(t: t, w: touchWind, g: touchGust)
-                            .padding(.top, 6)
-                    }
-                }
+                print("✅ Calculated \(visibleSurfSpots.count) surf scores")
+            }
 
-            HStack(spacing: 10) {
-                Text(hadError ? "Certaines balises ne répondent pas" : measureText)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                StatusPill(isOnline: isOnline)
+            await MainActor.run {
+                spotScores = newScores
+                isLoadingSpotScores = false
+                print("📍 SpotScores updated: \(spotScores.count) entries")
             }
         }
-        .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(radius: 14)
     }
 
-    private var stationDate: Date? {
-        guard let ts = latest?.ts else { return nil }
-        return Date(timeIntervalSince1970: TimeInterval(Int(ts)))
-    }
-
-    private var isOnline: Bool {
-        guard let d = stationDate else { return false }
-        return Date().timeIntervalSince(d) <= 20 * 60
-    }
-
-    private var measureText: String {
-        guard let d = stationDate else { return "Mesure —" }
-        let s = Int(Date().timeIntervalSince(d))
-        if s < 60 { return "Mesure il y a \(s)s" }
-        if s < 3600 { return "Mesure il y a \(s/60)m" }
-        return "Mesure il y a \(s/3600)h"
-    }
-
-    private var statWind: String {
-        guard let w = latest?.ws.moy.value else { return "—" }
-        return "\(Int(round(w))) nds"
-    }
-
-    private var statGust: String {
-        guard let g = latest?.ws.max.value else { return "—" }
-        return "\(Int(round(g))) nds"
-    }
-
-    private var statDir: String {
-        guard let d = latest?.wd.moy.value else { return "—" }
-        return "\(Int(round(d)))° \(cardinal(from: d))"
-    }
-
-    private func cardinal(from deg: Double) -> String {
-        let dirs = ["N","NE","E","SE","S","SW","W","NW"]
-        let idx = Int((deg + 22.5) / 45.0) & 7
-        return dirs[idx]
-    }
-
-
-    private func updateTouchValues(for date: Date) {
-        let wind = samples.filter { $0.kind == .wind }
-        let gust = samples.filter { $0.kind == .gust }
-
-        touchWind = nearestValue(in: wind, to: date)
-        touchGust = nearestValue(in: gust, to: date)
-
-        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.35)
-    }
-
-    private func nearestValue(in arr: [WCChartSample], to date: Date) -> Double? {
-        guard !arr.isEmpty else { return nil }
-        var best: WCChartSample = arr[0]
-        var bestDist = abs(arr[0].t.timeIntervalSince(date))
-        for s in arr {
-            let d = abs(s.t.timeIntervalSince(date))
-            if d < bestDist {
-                bestDist = d
-                best = s
+    private func findNearestStation(latitude: Double, longitude: Double, stations: [WindStation], maxDistance: Double) -> WindStation? {
+        let spotLocation = CLLocation(latitude: latitude, longitude: longitude)
+        return stations
+            .min(by: { s1, s2 in
+                let loc1 = CLLocation(latitude: s1.latitude, longitude: s1.longitude)
+                let loc2 = CLLocation(latitude: s2.latitude, longitude: s2.longitude)
+                return spotLocation.distance(from: loc1) < spotLocation.distance(from: loc2)
+            })
+            .flatMap { station in
+                let stationLocation = CLLocation(latitude: station.latitude, longitude: station.longitude)
+                return spotLocation.distance(from: stationLocation) <= maxDistance ? station : nil
             }
-        }
-        return best.value
     }
+
 }
 
-// MARK: - Fullscreen Chart
 
-private struct ChartFullScreen: View {
-    let title: String
-    let latest: WCWindObservation?
-    let samples: [WCChartSample]
-    @Binding var timeFrame: Int
-    let lastUpdatedAt: Date?
-
-    @Binding var touchX: Date?
-    @Binding var touchWind: Double?
-    @Binding var touchGust: Double?
-
-    let onClose: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 14) {
-
-                HStack(spacing: 10) {
-                    StatCard(title: "Vent", value: statWind)
-                    StatCard(title: "Rafales", value: statGust)
-                    StatCard(title: "Dir", value: statDir)
-                }
-                .padding(.horizontal, 14)
-
-                Picker("Période", selection: $timeFrame) {
-                    Text("2 h").tag(60)
-                    Text("6 h").tag(36)
-                    Text("24 h").tag(144)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 14)
-
-                WindChart(samples: samples.filter { $0.kind == .wind || $0.kind == .gust })
-                    .frame(height: 420)
-                    .padding(.horizontal, 14)
-                    .chartOverlay { proxy in
-                        GeometryReader { geo in
-                            ZStack(alignment: .topLeading) {
-                                Rectangle().fill(.clear).contentShape(Rectangle())
-                                    .gesture(
-                                        DragGesture(minimumDistance: 0)
-                                            .onChanged { v in
-                                                guard let plot = proxy.plotFrame else { return }
-                                                let frame = geo[plot]
-                                                let x = v.location.x - frame.origin.x
-                                                if let date: Date = proxy.value(atX: x) {
-                                                    touchX = date
-                                                    touchWind = nearestValue(in: samples.filter{$0.kind == .wind}, to: date)
-                                                    touchGust = nearestValue(in: samples.filter{$0.kind == .gust}, to: date)
-                                                    UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.35)
-                                                }
-                                            }
-                                            .onEnded { _ in
-                                                touchX = nil
-                                                touchWind = nil
-                                                touchGust = nil
-                                            }
-                                    )
-
-                                if let t = touchX,
-                                   let plot = proxy.plotFrame,
-                                   let xPos = proxy.position(forX: t) {
-                                    let x = geo[plot].origin.x + xPos
-
-                                    Path { p in
-                                        p.move(to: CGPoint(x: x, y: geo[plot].minY))
-                                        p.addLine(to: CGPoint(x: x, y: geo[plot].maxY))
-                                    }
-                                    .stroke(
-                                        Color.primary.opacity(0.18),
-                                        style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [4, 4])
-                                    )
-                                    .allowsHitTesting(false)
-                                }
-                            }
-                        }
-                    }
-                    .overlay(alignment: .topLeading) {
-                        if let t = touchX {
-                            Tooltip(t: t, w: touchWind, g: touchGust)
-                                .padding(.top, 6)
-                                .padding(.leading, 6)
-                        }
-                    }
-                HStack(spacing: 10) {
-                    Text(measureText)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    StatusPill(isOnline: isOnline)
-                }
-                .padding(.horizontal, 14)
-                Spacer()
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Image(systemName: "arrow.down.right.and.arrow.up.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                }
-            }
-        }
-    }
-
-    private var stationDate: Date? {
-        guard let ts = latest?.ts else { return nil }
-        return Date(timeIntervalSince1970: TimeInterval(Int(ts)))
-    }
-
-    private var isOnline: Bool {
-        guard let d = stationDate else { return false }
-        return Date().timeIntervalSince(d) <= 20 * 60
-    }
-
-    private var measureText: String {
-        guard let d = stationDate else { return "Mesure —" }
-        let s = Int(Date().timeIntervalSince(d))
-        if s < 60 { return "Mesure il y a \(s)s" }
-        if s < 3600 { return "Mesure il y a \(s/60)m" }
-        return "Mesure il y a \(s/3600)h"
-    }
-    private var statWind: String {
-        guard let w = latest?.ws.moy.value else { return "—" }
-        return "\(Int(round(w))) nds"
-    }
-    private var statGust: String {
-        guard let g = latest?.ws.max.value else { return "—" }
-        return "\(Int(round(g))) nds"
-    }
-    private var statDir: String {
-        guard let d = latest?.wd.moy.value else { return "—" }
-        return "\(Int(round(d)))° \(cardinal(from: d))"
-    }
-    private func cardinal(from deg: Double) -> String {
-        let dirs = ["N","NE","E","SE","S","SW","W","NW"]
-        let idx = Int((deg + 22.5) / 45.0) & 7
-        return dirs[idx]
-    }
-    private func nearestValue(in arr: [WCChartSample], to date: Date) -> Double? {
-        guard !arr.isEmpty else { return nil }
-        var best = arr[0]
-        var bestDist = abs(arr[0].t.timeIntervalSince(date))
-        for s in arr {
-            let d = abs(s.t.timeIntervalSince(date))
-            if d < bestDist { bestDist = d; best = s }
-        }
-        return best.value
-    }
-}
-
-// MARK: - Chart (pro)
-
-private struct WindChart: View {
-    let samples: [WCChartSample]
-
-    var body: some View {
-        // STRICT: series are identified by the ViewModel ids: "<ts>-w" and "<ts>-g".
-        // This prevents any direction values from ever entering the chart.
-        let wind = samples
-            .filter { $0.id.hasSuffix("-w") }
-            .filter { $0.value.isFinite && $0.value >= 0 && $0.value <= 80 }
-            .sorted { $0.t < $1.t }
-
-        let gust = samples
-            .filter { $0.id.hasSuffix("-g") }
-            .filter { $0.value.isFinite && $0.value >= 0 && $0.value <= 80 }
-            .sorted { $0.t < $1.t }
-
-        return Chart {
-            // Vent moyen — bleu continu
-            ForEach(wind) { s in
-                LineMark(
-                    x: .value("Time", s.t),
-                    y: .value("Wind", s.value)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(by: .value("Series", "Wind"))
-                .lineStyle(StrokeStyle(lineWidth: 3.0, lineCap: .round, lineJoin: .round))
-                .zIndex(0)
-            }
-
-            // Rafales — rouge pointillé
-            ForEach(gust) { s in
-                LineMark(
-                    x: .value("Time", s.t),
-                    y: .value("Gust", s.value)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(by: .value("Series", "Gust"))
-                .lineStyle(StrokeStyle(lineWidth: 3.0, lineCap: .round, lineJoin: .round, dash: [6, 4]))
-                .zIndex(10)
-                .opacity(1)
-                PointMark(
-                    x: .value("Time", s.t),
-                    y: .value("Gust", s.value)
-                )
-                .symbolSize(12)
-                .foregroundStyle(by: .value("Series", "Gust"))
-                .opacity(0.35)
-            }
-        }
-        .chartForegroundStyleScale([
-            "Wind": .blue,
-            "Gust": .red
-        ])
-        .chartLegend(.hidden)
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 5)) {
-                AxisGridLine(); AxisTick()
-                AxisValueLabel(format: .dateTime.hour().minute())
-            }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading) {
-                AxisGridLine(); AxisTick(); AxisValueLabel()
-            }
-        }
-        
-    }
-}
-// MARK: - Tooltip
-
-private struct Tooltip: View {
-    let t: Date
-    let w: Double?
-    let g: Double?
-
-    var body: some View {
-        HStack(spacing: 10) {
-            // Time (HH:mm) only
-            Text(t.formatted(.dateTime.hour().minute()))
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            // Wind value (colored like map)
-            Text(fmt(w))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(color(w))
-
-            Text("/")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            // Gust value (colored like map)
-            Text(fmt(g))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(color(g))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-    }
-
-    private func fmt(_ v: Double?) -> String {
-        guard let v else { return "—" }
-        return "\(Int(round(v)))"
-    }
-
-    private func color(_ v: Double?) -> Color {
-        guard let v else { return .secondary }
-        return windScale(v)
-    }
-}
-// MARK: - Stat Card
-
-private struct StatCard: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-
-            Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Wind color scale (approx from your legend)
-
-private func windScale(_ kts: Double) -> Color {
-    // Legend (noeuds): <7, 7–10, 11–16, 17–21, 22–27, 28–33, 34–40, 41–47, >48
-    switch kts {
-    case ..<7:
-        // light cyan
-        return Color(red: 0.70, green: 0.93, blue: 1.00)
-    case ..<11:
-        // turquoise
-        return Color(red: 0.33, green: 0.85, blue: 0.92)
-    case ..<17:
-        // green
-        return Color(red: 0.35, green: 0.89, blue: 0.52)
-    case ..<22:
-        // yellow
-        return Color(red: 0.97, green: 0.90, blue: 0.33)
-    case ..<28:
-        // orange
-        return Color(red: 0.98, green: 0.67, blue: 0.23)
-    case ..<34:
-        // red
-        return Color(red: 0.95, green: 0.22, blue: 0.26)
-    case ..<41:
-        // magenta
-        return Color(red: 0.83, green: 0.20, blue: 0.67)
-    case ..<48:
-        // purple
-        return Color(red: 0.55, green: 0.24, blue: 0.78)
-    default:
-        // deep purple
-        return Color(red: 0.39, green: 0.24, blue: 0.63)
-    }
-}
-
-// MARK: - GoWind Marker
-
-private struct GoWindMarker: View {
-    let station: GoWindStation
-
-    private var windInt: Int { Int(round(station.wind)) }
-    private var gustInt: Int { Int(round(station.gust)) }
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: "arrow.up")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.primary.opacity(station.isOnline ? 0.95 : 0.35))
-                // Même convention que CleanArrow
-                .rotationEffect(.degrees(station.dirDeg + 180))
-                .padding(5)
-                .background(
-                    Circle().fill(.thinMaterial).opacity(0.30)
-                )
-                .overlay(
-                    Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 0.8)
-                )
-
-            HStack(spacing: 5) {
-                Text("\(windInt)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(windScale(station.wind))
-
-                Text("/")
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Text("\(gustInt)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(windScale(station.gust))
-
-                Text("nds")
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(Color.white.opacity(0.10), lineWidth: 0.9)
-            )
-        }
-        .allowsHitTesting(false)
-    }
-}

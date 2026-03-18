@@ -8,7 +8,7 @@
 // HLS webcams (with quanteec streamUrl) are skipped by normal capture
 // and handled by the dedicated HLS capture (?hlsOnly=true) every 15 min.
 
-import { put, list, del, head as blobHead } from '@vercel/blob';
+import { put, list, del, head as blobHead } from '../lib/storage.js';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const RETENTION_HOURS = 48;
@@ -43,7 +43,7 @@ async function handleCapture(req, res, batchNum) {
   console.log(`Starting webcam capture batch ${batchNum} at ${new Date(startTime).toISOString()}`);
 
   try {
-    const webcamsResponse = await fetch('https://anemouest-api.vercel.app/api/webcams');
+    const webcamsResponse = await fetch('http://localhost:3001/api/webcams');
     const allWebcams = await webcamsResponse.json();
 
     let webcams;
@@ -86,7 +86,7 @@ async function handleCapture(req, res, batchNum) {
           if (webcam.source === 'Viewsurf' && imageUrl.includes('viewsurf?id=')) {
             const idMatch = imageUrl.match(/id=(\d+)/);
             if (idMatch) {
-              imageUrl = `https://anemouest-api.vercel.app/api/viewsurf?id=${idMatch[1]}`;
+              imageUrl = `http://localhost:3001/api/viewsurf?id=${idMatch[1]}`;
             }
           }
 
@@ -150,7 +150,9 @@ async function handleCapture(req, res, batchNum) {
         try {
           const existing = await blobHead('webcam-health.json');
           if (existing?.url) {
-            const r = await fetch(existing.url);
+            const url = new URL(existing.url);
+            url.searchParams.set('_t', Date.now());
+            const r = await fetch(url.toString(), { cache: 'no-store' });
             if (r.ok) healthData = await r.json();
           }
         } catch {}
@@ -195,7 +197,7 @@ async function handleHlsCapture(req, res) {
   console.log(`Starting HLS-only capture at ${new Date(startTime).toISOString()}`);
 
   try {
-    const webcamsResponse = await fetch('https://anemouest-api.vercel.app/api/webcams');
+    const webcamsResponse = await fetch('http://localhost:3001/api/webcams');
     const allWebcams = await webcamsResponse.json();
 
     // Dynamic: get all webcams with Quanteec HLS streams from API
@@ -224,7 +226,7 @@ async function handleHlsCapture(req, res) {
         const streamUrl = webcam.streamUrl;
 
         try {
-          let apiUrl = `https://anemouest-api.vercel.app/api/viewsurf-stream?id=${webcamId}`;
+          let apiUrl = `http://localhost:3001/api/viewsurf-stream?id=${webcamId}`;
           if (streamUrl) {
             apiUrl += `&streamUrl=${encodeURIComponent(streamUrl)}`;
           }
@@ -280,7 +282,9 @@ async function handleHlsCapture(req, res) {
         try {
           const existing = await blobHead('webcam-health.json');
           if (existing?.url) {
-            const r = await fetch(existing.url);
+            const url = new URL(existing.url);
+            url.searchParams.set('_t', Date.now());
+            const r = await fetch(url.toString(), { cache: 'no-store' });
             if (r.ok) healthData = await r.json();
           }
         } catch {}

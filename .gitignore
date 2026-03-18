@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+.env.local
+.DS_Store
+*.xcuserdatad/
+xcuserdata/
+.claude/
+.mcp.json
+tsconfig.tsbuildinfo
+icons.png
+mf-stations.html
