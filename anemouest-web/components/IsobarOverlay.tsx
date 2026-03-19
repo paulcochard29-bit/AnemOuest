@@ -277,9 +277,12 @@ export default function IsobarOverlay({ map, windData, visible, forecastHour }: 
         // Build path once, reuse for outline + fill
         const pathPoints: [number, number, number, number][] = []
         for (const [lon1, lat1, lon2, lat2] of segments) {
-          const p1 = map.project([lon1, lat1])
-          const p2 = map.project([lon2, lat2])
-          pathPoints.push([p1.x * dpr, p1.y * dpr, p2.x * dpr, p2.y * dpr])
+          if (Math.abs(lat1) > 85 || Math.abs(lat2) > 85 || Math.abs(lon1) > 180 || Math.abs(lon2) > 180) continue
+          try {
+            const p1 = map.project([lon1, lat1])
+            const p2 = map.project([lon2, lat2])
+            pathPoints.push([p1.x * dpr, p1.y * dpr, p2.x * dpr, p2.y * dpr])
+          } catch { continue }
         }
 
         const drawPath = () => {
