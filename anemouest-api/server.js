@@ -23,7 +23,7 @@ app.set('trust proxy', 1);
 // Rate limiting — public endpoints
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000,  // 1 minute
-  max: 120,             // 120 req/min per IP
+  max: 600,             // 600 req/min per IP
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
@@ -99,7 +99,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key');
   res.header('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
