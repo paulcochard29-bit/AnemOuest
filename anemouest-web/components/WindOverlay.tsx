@@ -102,6 +102,8 @@ export default function WindOverlay({ map, visible, forecastHour, onWindGLChange
     onWindGLChange?.(windGL)
 
     const addLayer = () => {
+      // Double-check style is loaded — getStyle() returns undefined if not ready
+      if (!map.getStyle()?.layers) return
       if (map.getLayer(LAYER_ID)) return
       try {
         // Find first symbol layer (labels, POIs, cities) — insert wind below it
@@ -137,7 +139,7 @@ export default function WindOverlay({ map, visible, forecastHour, onWindGLChange
       }
     }
 
-    if (map.isStyleLoaded()) {
+    if (map.isStyleLoaded() && map.getStyle()?.layers) {
       addLayer()
     } else {
       map.once('style.load', addLayer)

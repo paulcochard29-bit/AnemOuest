@@ -27,6 +27,19 @@ export const COLOR_STOPS_KTS: [number, number, number, number][] = [
 ]
 
 const MAX_SPEED_KTS = 65 // max of color scale
+const MAX_MERCATOR_LAT = 85.05 // Mercator projection limit
+
+function clampLat(lat: number): number {
+  return Math.max(-MAX_MERCATOR_LAT, Math.min(MAX_MERCATOR_LAT, lat))
+}
+
+function clampLng(lng: number): number {
+  return Math.max(-180, Math.min(180, lng))
+}
+
+function safeMercator(lng: number, lat: number) {
+  return mapboxgl.MercatorCoordinate.fromLngLat([clampLng(lng), clampLat(lat)])
+}
 
 function speedToColor(kts: number): [number, number, number] {
   if (kts <= COLOR_STOPS_KTS[0][0]) return [COLOR_STOPS_KTS[0][1], COLOR_STOPS_KTS[0][2], COLOR_STOPS_KTS[0][3]]
@@ -362,11 +375,28 @@ export class WindGL {
   }
 
   setWindData(data: WindData) {
-    this.windData = data
     const gl = this.gl
     if (!gl) return
 
-    const { width, height, speeds, bounds } = data
+    // Validate bounds
+    const { bounds } = data
+    if (!bounds || !isFinite(bounds.latMin) || !isFinite(bounds.latMax) ||
+        !isFinite(bounds.lonMin) || !isFinite(bounds.lonMax) ||
+        bounds.latMin >= bounds.latMax || bounds.lonMin >= bounds.lonMax) {
+      console.warn('[WindGL] Invalid wind data bounds, skipping:', bounds)
+      return
+    }
+
+    // Clamp bounds to Mercator limits
+    data.bounds = {
+      latMin: clampLat(bounds.latMin),
+      latMax: clampLat(bounds.latMax),
+      lonMin: clampLng(bounds.lonMin),
+      lonMax: clampLng(bounds.lonMax),
+    }
+
+    this.windData = data
+    const { width, height, speeds } = data
 
     // Upscale texture to TEX_SIZE with bilinear interpolation
     // speeds are in km/h from the API — convert to knots for color mapping
@@ -410,14 +440,14 @@ export class WindGL {
     const NUM_STRIPS = 10
     const positions = new Float32Array(NUM_STRIPS * 6 * 2)
     const texcoords = new Float32Array(NUM_STRIPS * 6 * 2)
-    const leftX = mapboxgl.MercatorCoordinate.fromLngLat([bounds.lonMin, 0]).x
-    const rightX = mapboxgl.MercatorCoordinate.fromLngLat([bounds.lonMax, 0]).x
+    const leftX = safeMercator(bounds.lonMin, 0).x
+    const rightX = safeMercator(bounds.lonMax, 0).x
 
     for (let s = 0; s < NUM_STRIPS; s++) {
-      const lat0 = bounds.latMin + (bounds.latMax - bounds.latMin) * (s / NUM_STRIPS)
-      const lat1 = bounds.latMin + (bounds.latMax - bounds.latMin) * ((s + 1) / NUM_STRIPS)
-      const y0 = mapboxgl.MercatorCoordinate.fromLngLat([0, lat0]).y
-      const y1 = mapboxgl.MercatorCoordinate.fromLngLat([0, lat1]).y
+      const lat0 = clampLat(bounds.latMin + (bounds.latMax - bounds.latMin) * (s / NUM_STRIPS))
+      const lat1 = clampLat(bounds.latMin + (bounds.latMax - bounds.latMin) * ((s + 1) / NUM_STRIPS))
+      const y0 = safeMercator(0, lat0).y
+      const y1 = safeMercator(0, lat1).y
       const ty0 = s / NUM_STRIPS
       const ty1 = (s + 1) / NUM_STRIPS
 
@@ -468,7 +498,7 @@ export class WindGL {
 
   private updateParticleMercator() {
     for (let i = 0; i < NUM_PARTICLES; i++) {
-      const mc = mapboxgl.MercatorCoordinate.fromLngLat([this.particleLons[i], this.particleLats[i]])
+      const mc = safeMercator(this.particleLons[i], this.particleLats[i])
       this.particleMerc[i * 2] = mc.x
       this.particleMerc[i * 2 + 1] = mc.y
     }
@@ -565,6 +595,10 @@ export class WindGL {
 
   render(gl: WebGLRenderingContext, matrix: number[]) {
     if (this._disposed || !this.windData) return
+    try { this._render(gl, matrix) } catch (e) { console.error('[WindGL] Render error:', e) }
+  }
+
+  private _render(gl: WebGLRenderingContext, matrix: number[]) {
 
     // Check if FBOs need creation/resize
     const canvas = gl.canvas as HTMLCanvasElement
