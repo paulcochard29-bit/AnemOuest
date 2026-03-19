@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-import { API } from '@/lib/api'
+import { API, apiFetch } from '@/lib/api'
 
 interface WindChartProps { stationId: string; source: string; hours?: number; windsupToken?: string | null }
 interface ChartData { time: string; wind: number; gust: number }
@@ -22,7 +22,7 @@ export function WindChart({ stationId, source, hours = 6, windsupToken }: WindCh
       : 'pioupiou'
     let url = `${API}/${endpoint}?history=${stationId}&hours=${hours}`
     if (source === 'windsup' && windsupToken) url += `&token=${encodeURIComponent(windsupToken)}`
-    fetch(url)
+    apiFetch(url)
       .then(r => r.json())
       .then(json => {
         setData((json.observations || []).map((o: any) => ({

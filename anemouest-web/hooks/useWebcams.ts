@@ -10,21 +10,15 @@ export function useWebcams() {
     let mounted = true
     const fetchWebcams = async () => {
       try {
-        // Fetch webcams + health data in parallel
-        const [webcamsRes, healthRes] = await Promise.all([
-          apiFetch(`${API_BASE}/webcams`),
-          apiFetch(`${API_BASE}/webcam-health`).catch(() => null),
-        ])
+        const webcamsRes = await apiFetch(`${API_BASE}/webcams`)
         if (!webcamsRes.ok) return
         const data = await webcamsRes.json()
-        const healthData = healthRes?.ok ? await healthRes.json() : { webcams: {} }
-        const healthMap = healthData.webcams || {}
 
         if (mounted) setWebcams(data.map((w: any) => ({
           id: w.id, name: w.name, location: w.location, latitude: w.latitude,
           longitude: w.longitude, imageUrl: w.imageUrl, source: w.source,
           region: w.region, refreshInterval: w.refreshInterval, streamUrl: w.streamUrl,
-          lastCapture: w.lastCapture || healthMap[w.id]?.lastSuccess || null,
+          lastCapture: w.lastCapture || null,
         })))
       } catch (err) { console.error('Error fetching webcams:', err) }
     }
