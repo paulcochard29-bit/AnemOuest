@@ -139,6 +139,15 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── Strategy 3: Vercel proxy fallback (Vercel IPs whitelisted by Skaping S3) ──
+    if (!imageResponse?.ok) {
+      const vercelUrl = `https://anemouest-api.vercel.app/api/skaping?path=${encodeURIComponent(path)}&server=s3&timestamp=${Math.floor(targetTime.getTime() / 1000)}`;
+      try {
+        const resp = await fetch(vercelUrl, { signal: AbortSignal.timeout(15000) });
+        if (resp.ok) { imageUrl = vercelUrl; imageResponse = resp; }
+      } catch { /* continue */ }
+    }
+
     if (!imageResponse?.ok) {
       return res.status(404).json({
         error: 'Failed to fetch image from Skaping',
