@@ -129,7 +129,13 @@ app.use((req, res, next) => {
 
 // ─── API Key authentication ───
 // Endpoints that don't require API key (public or handled by their own auth)
-const PUBLIC_ENDPOINTS = ['health', 'push/register'];
+const PUBLIC_ENDPOINTS = [
+  'health', 'push/register',
+  // Image/media endpoints called from <img> tags (can't send headers)
+  'webcam-image', 'skaping', 'viewsurf', 'viewsurf-stream', 'windsup-webcam', 'vision',
+  // Proxy endpoints
+  'radar-tile', 'wind-tiles', 'wind-raster',
+];
 const ADMIN_PREFIX = '/api/admin/';
 
 // Cache API keys in memory (refresh every 60s)
