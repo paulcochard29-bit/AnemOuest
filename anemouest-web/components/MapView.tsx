@@ -180,6 +180,7 @@ export function MapView({
 
   useEffect(() => {
     if (!flyTo || !mapRef.current) return
+    if (!isFinite(flyTo.lat) || !isFinite(flyTo.lon) || Math.abs(flyTo.lat) > 90 || Math.abs(flyTo.lon) > 180) return
     mapRef.current.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: flyTo.zoom || 12, duration: 1200, offset: flyTo.offset || [0, 0] })
   }, [flyTo])
 
@@ -294,7 +295,8 @@ export function MapView({
     clearMarkers('cam-')
     const bounds = map.getBounds()
     if (!bounds) return
-    const visibleWithCounts = filterByDensityWithCounts(webcams, bounds, 50)
+    const validWebcams = webcams.filter(w => isFinite(w.latitude) && isFinite(w.longitude) && Math.abs(w.latitude) <= 90 && Math.abs(w.longitude) <= 180)
+    const visibleWithCounts = filterByDensityWithCounts(validWebcams, bounds, 50)
     const now = Date.now()
     for (const { item: w, count } of visibleWithCounts) {
       const el = document.createElement('div')
@@ -369,7 +371,7 @@ export function MapView({
     const typeMap: Record<string, string> = { kiteSpots: 'kite', surfSpots: 'surf', paraglidingSpots: 'paragliding' }
     for (const type of types) {
       if (!layers[type]) continue
-      const typeSpots = spots.filter(s => s.spotType === typeMap[type])
+      const typeSpots = spots.filter(s => s.spotType === typeMap[type] && isFinite(s.lat) && isFinite(s.lon) && Math.abs(s.lat) <= 90 && Math.abs(s.lon) <= 180)
       const visible = filterByDensity(typeSpots, bounds, 80)
       for (const s of visible) {
         const color = SPOT_COLORS[s.spotType] || '#8e8e93'
