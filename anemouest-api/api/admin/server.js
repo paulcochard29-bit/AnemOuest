@@ -127,15 +127,19 @@ export default async function handler(req, res) {
       // Return cron schedule info
       const crons = [
         { name: 'push/send', schedule: '*/15 * * * *', desc: 'Push notifications' },
-        { name: 'candhis-cron', schedule: '10,40 * * * *', desc: 'Bouées CANDHIS' },
-        { name: 'webcam-health', schedule: '15,45 * * * *', desc: 'Santé webcams' },
-        { name: 'webcam-cron (batch 1-10)', schedule: '0-9,30-39 * * * *', desc: 'Capture images webcam' },
-        { name: 'webcam-cron (HLS)', schedule: '0,15,30,45 * * * *', desc: 'Capture webcams HLS' },
+        { name: 'candhis-cron', schedule: '10,40 * * * *', desc: 'Bouées CANDHIS (toutes les 30 min)' },
+        { name: 'webcam-health', schedule: '15,45 * * * *', desc: 'Santé webcams (toutes les 30 min)' },
+        { name: 'webcam-cron (batch 1-10)', schedule: '0-9,30-39 * * * *', desc: 'Capture images standard (10 batches)' },
+        { name: 'webcam-cron (HLS)', schedule: '0,15,30,45 * * * *', desc: 'Capture HLS Quanteec (Vision-Env exclu)' },
+        { name: 'webcam-cron (Skaping)', schedule: '5 batches × 6 min/h', desc: 'Capture Skaping S3 (cycle 10 min, ~670 cams)' },
+        { name: 'webcam-cron (Vision-Env)', schedule: '5,20,35,50 * * * *', desc: 'Capture Vision-Env via /api/vision (96 cams)' },
+        { name: 'webcam-cron (WindsUp)', schedule: '7,22,37,52 * * * *', desc: 'Capture WindsUp (22 cams)' },
         { name: 'webcam-cron (cleanup)', schedule: '0 */6 * * *', desc: 'Purge images >48h' },
         { name: 'webcam-ai', schedule: '0 6,18 * * *', desc: 'Suggestions IA webcams' },
-        { name: 'netatmo-cron', schedule: '*/3 * * * *', desc: 'Refresh Netatmo' },
-        { name: 'netatmo-cron (scan)', schedule: '5 */2 * * *', desc: 'Scan complet Netatmo' },
-        { name: 'wind-cron', schedule: '10 * * * *', desc: 'Prévisions vent' },
+        { name: 'netatmo-cron', schedule: '*/3 * * * *', desc: 'Refresh Netatmo (zones côtières)' },
+        { name: 'netatmo-cron (scan)', schedule: '5 */2 * * *', desc: 'Scan complet 15 zones côtières' },
+        { name: 'wind-cron', schedule: '10 * * * *', desc: 'Prévisions vent AROME' },
+        { name: 'analytics-cleanup', schedule: '0 3 * * *', desc: 'Purge analytics >90 jours' },
       ];
 
       // Get recent cron execution from logs
