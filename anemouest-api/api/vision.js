@@ -90,16 +90,35 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'No image found for this webcam', slug });
     }
 
-    // Fetch the actual image
-    const imageResponse = await fetch(imageUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Accept': 'image/*',
-        'Referer': 'https://www.vision-environnement.com/',
-      },
-    });
+    // Build fallback URL list — Vision-Env sometimes serves a stale og:image
+    // pointing to /captureptz/ while the actual file lives under /capture/
+    // (and vice-versa). Try the original first, then both alternatives.
+    const candidates = [imageUrl]
+    if (imageUrl.includes('/captureptz/')) {
+      candidates.push(imageUrl.replace('/captureptz/', '/capture/'))
+    } else if (imageUrl.includes('/capture/')) {
+      candidates.push(imageUrl.replace('/capture/', '/captureptz/'))
+    }
 
-    if (!imageResponse.ok) {
+    let imageResponse = null
+    for (const url of candidates) {
+      const r = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          'Accept': 'image/*',
+          'Referer': 'https://www.vision-environnement.com/',
+        },
+        redirect: 'follow',
+      })
+      // Reject HTML responses (Vision-Env redirects broken images to its homepage)
+      const contentType = r.headers.get('content-type') || ''
+      if (r.ok && contentType.startsWith('image/')) {
+        imageResponse = r
+        break
+      }
+    }
+
+    if (!imageResponse) {
       return res.status(502).json({ error: 'Failed to fetch image from source' });
     }
 
@@ -126,19 +145,24 @@ export default async function handler(req, res) {
     const jpegQuality = Math.min(100, Math.max(10, parseInt(quality) || baseQuality));
     const maxWidth = parseInt(width) || baseWidth;
 
-    // Process image with sharp
-    let processedImage = sharp(imageBuffer)
-      .resize(maxWidth, null, {
-        withoutEnlargement: true,
-        fit: 'inside',
-      })
-      .jpeg({
-        quality: jpegQuality,
-        progressive: true,
-        mozjpeg: isPanoramic || forcePanorama, // Better compression for panoramas
-      });
-
-    const outputBuffer = await processedImage.toBuffer();
+    // Process image with sharp — fallback to raw buffer if JPEG is corrupted
+    let outputBuffer;
+    try {
+      outputBuffer = await sharp(imageBuffer)
+        .resize(maxWidth, null, {
+          withoutEnlargement: true,
+          fit: 'inside',
+        })
+        .jpeg({
+          quality: jpegQuality,
+          progressive: true,
+          mozjpeg: isPanoramic || forcePanorama,
+        })
+        .toBuffer();
+    } catch (sharpErr) {
+      console.warn(`Vision sharp error for ${slug}: ${sharpErr.message}, serving raw image`);
+      outputBuffer = imageBuffer;
+    }
 
     // Get the real image timestamp from Last-Modified header
     let imageTimestamp = null;
